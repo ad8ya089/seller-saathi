@@ -10,6 +10,10 @@ import type {
 import type { DomainState, Hypothesis, SellerFacts } from '@/lib/domain/types';
 import type { z } from 'zod';
 import type { skuSchema } from '@/lib/domain/data-schemas';
+import type {
+  InvestigationPolicy,
+  SignalThresholds,
+} from '@/lib/domain/settings';
 
 export const ACTION_POLICY = {
   healthyStockMin: 10,
@@ -32,7 +36,11 @@ export interface ActionContext {
   oosProducts: z.infer<typeof skuSchema>[];
 }
 
-export function actionContext(state: DomainState): ActionContext {
+export function actionContext(
+  state: DomainState,
+  thresholds?: SignalThresholds,
+  policy?: InvestigationPolicy,
+): ActionContext {
   const skus = state.toolsCalled.has('get_sku_breakdown')
     ? state.skus
     : undefined;
@@ -41,10 +49,9 @@ export function actionContext(state: DomainState): ActionContext {
     : undefined;
   return {
     scores: new Map(
-      computeDiagnosis(state).hypotheses.map((hypothesis) => [
-        hypothesis.id,
-        hypothesis.score,
-      ]),
+      computeDiagnosis(state, thresholds, policy).hypotheses.map(
+        (hypothesis) => [hypothesis.id, hypothesis.score],
+      ),
     ),
     facts: state.facts,
     inventory: skus ? inventoryMetrics(state.snapshot, skus) : null,

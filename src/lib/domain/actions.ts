@@ -5,6 +5,16 @@ import { calendarDate } from '@/lib/domain/dates';
 import { actionPlanSchema } from '@/lib/domain/plan';
 import type { ActionPlan } from '@/lib/domain/plan';
 import type { DomainState, SellerActionId } from '@/lib/domain/types';
+import type {
+  InvestigationPolicy,
+  SignalThresholds,
+} from '@/lib/domain/settings';
+
+interface PlanningOptions {
+  actionIds?: readonly SellerActionId[];
+  thresholds?: SignalThresholds;
+  investigation?: InvestigationPolicy;
+}
 
 export interface ActionEvaluation {
   id: SellerActionId;
@@ -14,8 +24,15 @@ export interface ActionEvaluation {
   rankScore: number;
 }
 
-export function evaluateActions(state: DomainState): ActionEvaluation[] {
-  const context = actionContext(state);
+export function evaluateActions(
+  state: DomainState,
+  options?: PlanningOptions,
+): ActionEvaluation[] {
+  const context = actionContext(
+    state,
+    options?.thresholds,
+    options?.investigation,
+  );
   return ACTION_CATALOG.map((action) => {
     const feasibility = action.feasibility(context);
     return {
@@ -39,12 +56,36 @@ export function buildPlan(
   state: DomainState,
   today: Date,
   planId?: string,
+  options?: PlanningOptions,
 ): ActionPlan {
   const createdDate = calendarDate(today);
-  const context = actionContext(state);
-  const selected = evaluateActions(state)
-    .filter((action) => action.eligible)
-    .slice(0, 3);
+  const context = actionContext(
+    state,
+    options?.thresholds,
+    options?.investigation,
+  );
+  const eligible = evaluateActions(state, options).filter(
+    (action) => action.eligible,
+  );
+  const selected = options?.actionIds
+    ? options.actionIds.map((id) => {
+        const entry = eligible.find((action) => action.id === id);
+        if (!entry)
+          throw new AppError(
+            'INSUFFICIENT_ACTIONS',
+            'Selected action is not eligible',
+          );
+        return entry;
+      })
+    : eligible.slice(0, 3);
+  if (
+    selected.length > 3 ||
+    new Set(selected.map((action) => action.id)).size !== selected.length
+  )
+    throw new AppError(
+      'INSUFFICIENT_ACTIONS',
+      'Select two or three unique eligible actions',
+    );
   if (selected.length < 2)
     throw new AppError(
       'INSUFFICIENT_ACTIONS',

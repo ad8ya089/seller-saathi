@@ -34,6 +34,25 @@ function state(): DomainState {
 const today = new Date('2026-11-10T12:00:00Z');
 
 describe('recovery planning', () => {
+  it('fills an explicit eligible selection and rejects ineligible or duplicate selections', () => {
+    const plan = buildPlan(state(), today, 'selected', {
+      actionIds: ['A_STOCK_SYNC', 'A_PUSH_INSTOCK'],
+    });
+    expect(plan.actions.map((action) => action.id)).toEqual([
+      'A_STOCK_SYNC',
+      'A_PUSH_INSTOCK',
+    ]);
+    expect(() =>
+      buildPlan(state(), today, 'invalid', {
+        actionIds: ['A_PRICE_CHECK', 'A_STOCK_SYNC'],
+      }),
+    ).toThrow();
+    expect(() =>
+      buildPlan(state(), today, 'duplicate', {
+        actionIds: ['A_STOCK_SYNC', 'A_STOCK_SYNC'],
+      }),
+    ).toThrow();
+  });
   it('builds S1 with the three catalog actions and a separate KAM checkpoint', () => {
     const plan = buildPlan(state(), today);
     expect(plan.actions.map((action) => action.id)).toEqual([
