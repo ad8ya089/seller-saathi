@@ -1,26 +1,26 @@
 # SellerSaathi — Snapdeal Virtual KAM
 
-## Implementation status — P2 echo slice
+## Implementation status — P3 agent core
 
-SellerSaathi includes the P1 deterministic domain foundation and a P2 browser voice echo: local Silero VAD → WAV → Sarvam STT → "You said: …" → Sarvam TTS → Web Audio. Text input uses the same streaming endpoint. This preview does not diagnose sellers or invoke an LLM. The agent and deployment remain in later phases.
+SellerSaathi now runs the seller recovery conversation: local Silero VAD → WAV → Sarvam STT → Gemini function calls → guarded deterministic domain tools → sentence-streamed Sarvam TTS → Web Audio. Server sessions enforce phases, three investigation questions, eligible plans and explicit acceptance before a JSONL commitment. The console also supports text and explicit plan confirmation. All seller data is mock data; saved plans do not change Snapdeal systems.
 
 Use Node.js 22.12 or later within Node 22 and npm. From the repository root:
 
 ```sh
 npm ci
-# Copy .env.example to .env and privately set SARVAM_API_KEY for live speech.
+# Copy .env.example to .env and privately set GEMINI_API_KEY and SARVAM_API_KEY.
 npm run dev
 ```
 
-Open `http://localhost:3000/?debug=1` in Chrome. Click Call, allow the microphone and speak a short sentence, or type and Send. Capture pauses during processing/playback and resumes after a short cooldown. End Call stops playback, aborts the request and releases microphone tracks. Localhost or HTTPS is required for microphone access. Debug measures the last VAD speech frame to scheduled playback; perceived output delay requires a human listening test.
+Open `http://localhost:3000/?debug=1` in Chrome. Click Call, allow the microphone and hear the AI greeting. Explain a sales drop, answer the stock and restock questions, review the spoken plan and explicitly accept it. Capture pauses during processing/playback and resumes after a short cooldown. End Call cancels server work and releases microphone tracks. English-India is the P3 call language. Localhost or HTTPS is required for microphone access. Debug measures the last VAD speech frame to scheduled playback; device output delay is not measured.
 
 `npm ci` copies pinned VAD/ONNX assets into ignored `public/vad/` through postinstall; the app configures local URLs for all four assets. `npm run smoke:sarvam` makes a bounded live audition (five TTS + four STT calls), saves ignored WAVs under `.data/audition/`, and records observed results in [provider notes](docs/provider-notes.md). Ordinary tests use fakes and reject live network calls.
 
-Production locally: `npm run build`, then `npm start`. Startup copies static assets and mock data into the generated standalone directory and launches its server. Set `PORT` and `HOSTNAME` in `.env` or the shell. Run `npm run lint`, `npm run typecheck`, `npm test`, `npm run verify-data`, and `npm run build` for verification. `npm run test:watch` starts Vitest watch mode.
+Production locally: `npm run build`, then `npm start`. Startup copies static assets and mock data into the generated standalone directory and launches its server. Set `PORT` and `HOSTNAME` in `.env` or the shell. Set an absolute `DATA_DIR` when sharing the same ledger between development, CLI and standalone: the generated standalone server changes its working directory. Run `npm run lint`, `npm run typecheck`, `npm test`, `npm run verify-data`, and `npm run build` for verification. `npm run test:watch` starts Vitest watch mode.
 
-`/api/health` reports provider **configuration**, not connectivity. It returns HTTP 200 with absent optional credentials, HTTP 503 for invalid explicit configuration, and zero active sessions in P2. The echo endpoint treats `sessionId` as an opaque call identifier. `DATA_DIR` is writable ledger storage; `MOCK_DATA_DIR` is the read-only fixture source. Server modules use the `server-only` marker. The verifier runs with Node's `react-server` condition so CLI loading preserves that boundary.
+`/api/health` reports provider **configuration**, not connectivity, and the live in-memory session count. It returns HTTP 200 with absent optional credentials and HTTP 503 for invalid explicit configuration. `/api/session` creates the UUID used by `/api/turn`; every turn also needs a client UUID `turnId`. Identical retries replay for 60 seconds. Sessions are process-local and capped at 25 turns, ten active minutes and a 30-minute TTL. `DATA_DIR` is writable ledger storage; `MOCK_DATA_DIR` is the read-only fixture source. Server modules use the `server-only` marker.
 
-Later-phase scripts (`smoke:gemini`, `chat`, `eval`, `bench`) identify the pending phase and exit with status 1. See [P2 report](docs/p2-report.md) for completed checks and outstanding human microphone verification.
+`npm run chat` opens the real Gemini text REPL. `npm run chat -- --scenario S1` runs the scripted seller acceptance check without speech providers and writes its synthetic trace under ignored `.data/chat/`. `npm run smoke:gemini` verifies a small signed function-call round trip on the configured primary model; `-- --fallback` explicitly tests the configured fallback. Both commands use paid providers. Ordinary tests use fakes. `eval` and `bench` remain P5 placeholders. See the [P3 report](docs/p3-report.md) for real-provider traces, measured latency and manual-check limits.
 
 See [P1 decisions](docs/p1-decisions.md) for resolved documentation conflicts and policy choices. The design pack below describes the complete planned application, including work beyond P1.
 
@@ -55,13 +55,13 @@ Cascaded voice pipeline · Sarvam Saaras STT + Bulbul TTS · Gemini 3.5 Flash-Li
 9. **Deployment:** kept EC2+Caddy+DuckDNS (your verified pattern), but build on-instance with swap (as in Roster Sync) instead of adding a GHCR pipeline; Mumbai region; no access-code wall (caps instead).
 10. **Cut:** Seller Health Score, localStorage sessions, WebSocket stack, anything multi-seller.
 
-## Things to verify yourself (I could not)
-- Gemini 3.x thinking-parameter name and thought-signature handling → `smoke:gemini` (P3).
-- Audition the five successful Sarvam samples and finish the five-turn microphone listening test; see `docs/provider-notes.md` and `docs/p2-report.md`.
+## Verification status and remaining checks
+- Gemini minimal thinking and signed tool continuation passed the live P3 smoke; the final S1 run also used the configured fallback successfully. See `docs/provider-notes.md`.
+- P2 manual Chrome testing was reported complete in the P3 brief. The P3 Chrome run supplied three completed voice turns and a saved-plan screen; see the P3 report for the exact evidence and listening limits.
 - Sarvam free credits (docs say ₹100; one page says ₹1,000) → dashboard.
 - Papers cited in docs/04 were from the earlier research pass; re-read before quoting.
 - Deployment snippets in docs/06 are adapted, **untested**; P6 + your runbook verify them.
 - Brief's "1–2 hours expected effort" vs this scope: the core path (P1–P3 + minimal UI) already satisfies the brief; everything after is differentiation. Don't let it threaten the deadline.
 
 ## Start
-P1 and the P2 implementation are local. Use the P2 preview and complete the remaining manual checks before proceeding to the next phase.
+P1–P3 are implemented locally. Start the English-India call preview or run the real Gemini S1 text scenario. P4 and later phases remain out of scope for this change.

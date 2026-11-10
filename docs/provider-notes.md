@@ -85,3 +85,11 @@ Synthetic function/tool trace and observed timings/tokens:
   }
 ]
 ```
+
+## Gemini S1 acceptance — 2026-11-10T17:32:00Z
+
+`npm run chat -- --scenario S1` completed the real guarded agent in four seller turns, with Q_OOS_CONFIRM and Q_RESTOCK_ETA, three eligible actions and exactly one record for plan `73e1f831-f7e4-4466-8de4-c87fc94b4193`. No STT or TTS was called. The final findings included the domain-derived sales decline and cancellation evidence before the stock question.
+
+The detailed trace contains twelve successful model invocations: eleven on `gemini-3.5-flash-lite` and one on configured fallback `gemini-3.6-flash` while recording the supplier-delay answer. The adapter reaches fallback only after its bounded timeout/5xx primary retry; the trace does not store which retryable condition occurred or the usage of failed attempts. This is a live fallback continuation success, including the existing signed primary history, rather than just a fake-provider assertion. The top-level CLI model field identifies the configured primary; per-turn `metrics.models` identifies the actual models used.
+
+Reported successful-request usage was 54,609 input tokens, 442 output tokens and zero reported thought tokens. Turn totals were 9,196.9, 27,727.7, 15,195.9 and 10,274.2 milliseconds. These include the bounded retry/fallback delay where applicable, are not individual request deadlines, and do not establish a low-latency voice target. The synthetic local trace is ignored under `.data/chat/S1-1794331920972-e8ef12eb-8d0f-4e8b-8702-f215ce4ccc5c.json`.

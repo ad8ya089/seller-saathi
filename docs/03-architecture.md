@@ -2,7 +2,7 @@
 
 One Next.js (TypeScript) service, long-lived Node container. No DB, no queue, no vector store, no agent framework.
 
-P2 status: only the echo path is active, with `transcript`, `sentence`, `audio`, `done` and `error` events. Its `done.timings` contains `sttMs`, `ttsFirstMs`, `totalMs`; `turn` is 1 for each stateless server request. The browser counts turns within a call. Session APIs/state, LLM/tool events, barge-in, fillers and browser speech-synthesis fallback below are future-phase design. P2 surfaces sanitized errors and lets the user retry, avoiding automatic duplicate submissions. See [P2 report](p2-report.md).
+P3 status: the active path uses server-created sessions, real Gemini function calling, seven guarded tools, deterministic phases and JSONL commitments. SSE extends the P2 framing with `tool`, `state` and `fallback`; `done.timings` adds `llmFirstMs`, and `turn` is the server session turn. Every turn requires a UUID `turnId`, with identical completed results replayed for 60 seconds. The browser plays the cached AI greeting, pauses capture throughout processing/playback and uses browser speech synthesis for an explicitly failed TTS sentence. The minimal console has explicit accept/decline buttons. Full dashboard panels, barge-in, fillers, deployment and Hindi remain later phases. See [P3 report](p3-report.md) for implementation decisions and verification; the diagrams below also contain future design elements.
 
 ## 1. Component view
 
