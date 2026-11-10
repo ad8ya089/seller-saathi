@@ -21,6 +21,9 @@ describe('seller evidence and confirmation', () => {
     'No, do not save',
     '[ui-confirm]',
     'Yes, tell me more first',
+    'Sure, perhaps',
+    'Okay, let us think about it',
+    'Yes, that is a different plan',
   ])('rejects ambiguity, negation and fabricated UI markers: %s', (text) => {
     expect(verifiedAcceptance('Yes', text)).toBe(false);
     expect(verifiedAcceptance(text, text)).toBe(false);

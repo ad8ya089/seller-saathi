@@ -16,6 +16,7 @@ export interface FakeResponse {
   usage?: TokenUsage;
   error?: AppError;
   before?: () => Promise<void>;
+  afterText?: (index: number) => Promise<void>;
 }
 export class FakeLlm implements LlmProvider {
   readonly requests: LlmRequest[] = [];
@@ -35,9 +36,10 @@ export class FakeLlm implements LlmProvider {
       );
     if (next.before) await abortable(next.before(), signal);
     if (next.error) throw next.error;
-    for (const text of next.text ?? []) {
+    for (const [index, text] of (next.text ?? []).entries()) {
       throwIfAborted(signal);
       await onText(text);
+      if (next.afterText) await abortable(next.afterText(index), signal);
     }
     const message: Extract<LlmMessage, { kind: 'model' }> = {
       kind: 'model',

@@ -11,6 +11,7 @@ interface Limits {
 export class SessionStore {
   private readonly sessions = new Map<string, Session>();
   private readonly busy = new Set<string>();
+  private readonly cancellations = new Map<string, AbortController>();
   constructor(
     private readonly limits: Limits = {
       ttlMs: 1800000,
@@ -43,13 +44,14 @@ export class SessionStore {
       },
     };
     this.sessions.set(session.id, session);
+    this.cancellations.set(session.id, new AbortController());
     return session;
   }
   get(id: string): Session {
     const session = this.sessions.get(id);
     if (!session) throw new AppError('SESSION_NOT_FOUND', 'Start a new call.');
     if (this.now() - session.createdAt >= this.limits.ttlMs) {
-      this.sessions.delete(id);
+      this.remove(id);
       throw new AppError(
         'SESSION_EXPIRED',
         'This call has expired. Start a new call.',
@@ -91,7 +93,22 @@ export class SessionStore {
     }
   }
   remove(id: string): void {
+    this.cancellations.get(id)?.abort();
+    this.cancellations.delete(id);
     this.sessions.delete(id);
+  }
+  signal(id: string): AbortSignal {
+    this.get(id);
+    const controller = this.cancellations.get(id);
+    if (!controller)
+      throw new AppError('SESSION_NOT_FOUND', 'Start a new call.');
+    const remaining =
+      Math.min(this.limits.ttlMs, this.limits.maxMs) -
+      (this.now() - this.get(id).createdAt);
+    return AbortSignal.any([
+      controller.signal,
+      AbortSignal.timeout(Math.max(1, Math.min(2147483647, remaining))),
+    ]);
   }
   count(): number {
     this.prune();
@@ -103,6 +120,6 @@ export class SessionStore {
         !this.busy.has(id) &&
         this.now() - session.createdAt >= this.limits.ttlMs
       )
-        this.sessions.delete(id);
+        this.remove(id);
   }
 }

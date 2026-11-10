@@ -33,5 +33,9 @@ describe('plan speech derived from catalog data', () => {
     ).toBe(true);
     expect(planSummary(plan)).toContain('two days');
     expect(planSummary(plan)).toContain('seven days');
+    const partial = planSummary(plan, 'STOCK', ['A_STOCK_SYNC']);
+    expect(partial).toContain('match panel stock today');
+    expect(partial).not.toContain('order priority stock');
+    expect(partial).not.toContain('promote available products');
   });
 });

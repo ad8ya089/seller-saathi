@@ -27,7 +27,7 @@ export function verifiedAcceptance(quote: string, utterance: string): boolean {
     )
   )
     return false;
-  return /^(yes|yeah|yep|sure|okay|ok|agreed|i agree|i accept|please save|save (it|this|the plan)|go ahead)\b/.test(
+  return /^(?:(?:yes|yeah|yep|sure|okay|ok|agreed)(?:\s+(?:please|go ahead|and|save (?:it|this|this plan|the plan)|do that|lets do it|lets proceed|proceed|i agree|that works))*|i (?:agree|accept)(?: (?:to|with) (?:this|the) plan)?|(?:please )?save (?:it|this|this plan|the plan)|go ahead(?: and save (?:it|the plan))?)$/.test(
     text,
   );
 }
@@ -59,6 +59,11 @@ export function supportsFact(
 ): boolean {
   if (!supportsQuote(fact.quote, utterance)) return false;
   const text = normalizeEvidence(fact.quote);
+  if (
+    /^(yes|yeah|sure|okay|ok)\b/.test(text) &&
+    /\b(but|not|no|dont|cannot|cant)\b/.test(normalizeEvidence(utterance))
+  )
+    return false;
   const answering =
     question !== undefined &&
     QUESTION_BANK[question].records.includes(fact.factId);

@@ -5,6 +5,18 @@ import { cloneSession, domainState, trimHistory } from '@/lib/agent/session';
 import { fixture } from '../fixtures';
 
 describe('server phase authority', () => {
+  it('keeps intake until the seller has identified a business problem', () => {
+    const session = new SessionStore().create();
+    session.phase = 'intake';
+    session.lastUserText = 'Hello there.';
+    expect(phaseDeclarations(session)).toEqual([]);
+    expect(() => transition(session, 'findings')).toThrow();
+    session.lastUserText = 'My sales have dropped this month.';
+    expect(phaseDeclarations(session).map((tool) => tool.name)).toEqual([
+      'get_seller_snapshot',
+    ]);
+    transition(session, 'findings');
+  });
   it('never exposes commit before confirm or recommendation before investigation', () => {
     const session = new SessionStore().create();
     for (const phase of [
@@ -80,13 +92,24 @@ describe('server phase authority', () => {
       },
     ];
     const draft = cloneSession(session);
+    draft.facts.oos_confirmed = {
+      factId: 'oos_confirmed',
+      value: 'yes',
+      quote: 'Both are out of stock',
+      turn: 1,
+    };
     trimHistory(draft, 3);
     expect(draft.history).toHaveLength(1);
     expect(draft.history[0]?.messages[1]).toEqual({
       kind: 'model',
       content: [signed],
     });
-    expect(draft.facts).toEqual(session.facts);
+    expect(draft.facts.oos_confirmed?.value).toBe('yes');
+    expect(session.facts.oos_confirmed).toBeUndefined();
+    expect(
+      draft.history[0]?.messages[1]?.kind === 'model' &&
+        draft.history[0].messages[1].content[0],
+    ).toBe(signed);
     expect(session.history).toHaveLength(2);
   });
 });

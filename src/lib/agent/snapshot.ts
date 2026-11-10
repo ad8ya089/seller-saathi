@@ -14,6 +14,7 @@ import { domainState } from '@/lib/agent/session';
 import type { Session } from '@/lib/agent/session';
 import type { SellerData } from '@/lib/domain/data-schemas';
 import type { AppConfig } from '@/lib/server/config';
+import { DEFAULT_THRESHOLDS } from '@/lib/domain/settings';
 
 export type DomainSettings = Pick<AppConfig, 'thresholds' | 'investigation'>;
 export function diagnosisFor(
@@ -30,6 +31,7 @@ export function diagnosisFor(
   return diagnosis;
 }
 export function spokenEvidence(session: Session, data: SellerData): string[] {
+  if (!session.toolsCalled.has('get_seller_snapshot')) return [];
   const { last, this: current } = data.seller.periods;
   const evidence = [
     `Sales fell from ${spokenMoney(last.sales)} to ${spokenMoney(current.sales)}.`,
@@ -46,7 +48,7 @@ export function spokenEvidence(session: Session, data: SellerData): string[] {
     evidence.push(
       `${spokenPercent(cancels.stockPct)} of cancellations were because stock was unavailable.`,
     );
-    if (cancels.stockPct >= 50)
+    if (cancels.stockPct >= DEFAULT_THRESHOLDS.stockCancelPct)
       evidence.push(
         `Sales fell from ${spokenMoney(last.sales)} to ${spokenMoney(current.sales)}, and stock shortages dominate cancellations.`,
       );

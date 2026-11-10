@@ -75,7 +75,15 @@ export class FunctionCalls {
     if (this.entries.length > 12) invalid();
     if (value.name && entry.call.name !== value.name) invalid();
     const args = z.record(z.string(), z.unknown()).parse(entry.call.args);
-    if (value.args) Object.assign(args, value.args);
+    if (value.args) {
+      if (
+        Object.keys(value.args).some((key) =>
+          ['__proto__', 'prototype', 'constructor'].includes(key),
+        )
+      )
+        invalid();
+      Object.assign(args, value.args);
+    }
     for (const partial of value.partialArgs ?? []) {
       const values = [
         partial.stringValue,

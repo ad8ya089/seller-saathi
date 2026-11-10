@@ -2,6 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { SessionStore } from '@/lib/server/session-store';
 
 describe('in-memory sessions', () => {
+  it('cancels active session work when End Call removes the session', () => {
+    const store = new SessionStore();
+    const session = store.create();
+    const signal = store.signal(session.id);
+    expect(signal.aborted).toBe(false);
+    store.remove(session.id);
+    expect(signal.aborted).toBe(true);
+    expect(store.count()).toBe(0);
+  });
   it('expires sessions, prunes health counts and applies active-time/turn caps', () => {
     let now = 0;
     const store = new SessionStore(

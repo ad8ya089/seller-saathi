@@ -35,6 +35,11 @@ const TOOLS: Readonly<Record<Phase, readonly ToolName[]>> = {
   summary: [],
   done: [],
 };
+export function hasSellerProblem(text: string): boolean {
+  return /\b(sales?|orders?|stock|cancellations?|business|revenue|selling|dropped|decline)\b/i.test(
+    text,
+  );
+}
 export function findingsComplete(session: Session): boolean {
   return [
     'get_seller_snapshot',
@@ -51,6 +56,11 @@ export function transition(
     throw new AppError(
       'TOOL_NOT_ALLOWED',
       'Conversation transition is not allowed',
+    );
+  if (session.phase === 'intake' && !hasSellerProblem(session.lastUserText))
+    throw new AppError(
+      'TOOL_NOT_ALLOWED',
+      'Identify the seller problem before findings',
     );
   if (session.phase === 'findings' && !findingsComplete(session))
     throw new AppError(
@@ -76,6 +86,8 @@ export function transition(
 }
 export function toolAllowed(session: Session, name: ToolName): boolean {
   if (!TOOLS[session.phase].includes(name)) return false;
+  if (session.phase === 'intake' && !hasSellerProblem(session.lastUserText))
+    return false;
   if (
     name !== 'get_seller_snapshot' &&
     !session.toolsCalled.has('get_seller_snapshot')

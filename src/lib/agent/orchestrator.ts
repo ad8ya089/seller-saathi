@@ -1,0 +1,291 @@
+import { z } from 'zod';
+import { AppError } from '@/lib/errors';
+import { SentenceChunker } from '@/lib/agent/chunker';
+import { SpeechPipeline } from '@/lib/agent/speech-pipeline';
+import {
+  SpeechGuard,
+  SAVED_RECEIPT,
+  SAVE_QUESTION,
+} from '@/lib/agent/speech-guard';
+import { beginTurn, requiredStep } from '@/lib/agent/turn-policy';
+import { systemPrompt } from '@/lib/agent/prompts/system';
+import { turnContext } from '@/lib/agent/context';
+import {
+  askQuestion,
+  findingsComplete,
+  toolAllowed,
+  transition,
+} from '@/lib/agent/phases';
+import { executeTool, finalizeCommit } from '@/lib/agent/tools';
+import type { ToolEnvironment } from '@/lib/agent/tools';
+import { TOOL_LABELS, toolNameSchema } from '@/lib/agent/tool-contracts';
+import { domainState, trimHistory } from '@/lib/agent/session';
+import type { Session, HistoryTurn } from '@/lib/agent/session';
+import { diagnosisFor } from '@/lib/agent/snapshot';
+import { sessionState } from '@/lib/agent/contracts';
+import { QUESTION_BANK } from '@/lib/domain/questions';
+import { lintSpeech } from '@/lib/domain/speech';
+import type { Phase } from '@/lib/domain/types';
+import type { LlmProvider, ToolResponse } from '@/lib/llm/provider';
+import type { SttProvider, TtsProvider } from '@/lib/voice/providers';
+import type { EchoInput } from '@/lib/server/turn-input';
+import type { EmitEchoEvent } from '@/lib/voice/events';
+import { throwIfAborted } from '@/lib/voice/abort';
+
+export interface TurnMetrics {
+  sttMs: number;
+  llmFirstMs: number;
+  llmTotalMs: number;
+  ttsFirstMs: number;
+  firstAudioMs: number;
+  totalMs: number;
+  tools: string[];
+  models: string[];
+  tokens: { input: number; output: number; thoughts: number };
+}
+export interface TurnEnvironment {
+  llm: LlmProvider;
+  stt?: SttProvider;
+  tts?: TtsProvider;
+  tools: ToolEnvironment;
+  signal: AbortSignal;
+  maxToolRounds?: number;
+  onCommitPoint?: () => void;
+  now?: () => number;
+}
+export async function runTurn(
+  session: Session,
+  input: EchoInput,
+  emit: EmitEchoEvent,
+  env: TurnEnvironment,
+): Promise<TurnMetrics> {
+  const lifetime = new AbortController();
+  env = { ...env, signal: AbortSignal.any([env.signal, lifetime.signal]) };
+  const now = env.now ?? performance.now.bind(performance);
+  const started = now();
+  const metrics: TurnMetrics = {
+    sttMs: 0,
+    llmFirstMs: 0,
+    llmTotalMs: 0,
+    ttsFirstMs: 0,
+    firstAudioMs: 0,
+    totalMs: 0,
+    tools: [],
+    models: [],
+    tokens: { input: 0, output: 0, thoughts: 0 },
+  };
+  throwIfAborted(env.signal);
+  const wasFindings = !findingsComplete(session);
+  let transcript: { text: string; ms: number };
+  if (input.kind === 'audio') {
+    if (!env.stt)
+      throw new AppError(
+        'PROVIDER_CONFIG',
+        'Speech recognition is not configured',
+      );
+    session.counters.sttCalls += 1;
+    transcript = await env.stt.transcribe(input.wav, 'unknown', env.signal);
+  } else transcript = { text: input.text, ms: 0 };
+  const parsed = z
+    .strictObject({
+      text: z.string().trim().min(1).max(8000),
+      ms: z.number().nonnegative(),
+    })
+    .safeParse(transcript);
+  if (!parsed.success)
+    throw new AppError('NO_SPEECH', 'No usable seller speech was recognized');
+  session.lastUserText = parsed.data.text;
+  metrics.sttMs = parsed.data.ms;
+  emit({
+    event: 'transcript',
+    data: { text: session.lastUserText, sttMs: metrics.sttMs },
+  });
+  beginTurn(session);
+  const history: HistoryTurn = {
+    turn: session.turn,
+    messages: [{ kind: 'user', text: session.lastUserText }],
+  };
+  session.history.push(history);
+  const pipeline = new SpeechPipeline(env.tts, emit, env.signal, started, now);
+  let guard: SpeechGuard | undefined;
+  let reservedQuestion = '';
+  let questionId = null as ReturnType<
+    typeof diagnosisFor
+  >['suggestedNextQuestion'];
+  let responsePhase: Phase = session.phase;
+  const createGuard = (): SpeechGuard => {
+    const diagnosis = diagnosisFor(session, env.tools.data, env.tools.settings);
+    responsePhase =
+      session.phase === 'investigate' && wasFindings
+        ? 'findings'
+        : session.phase;
+    questionId =
+      session.phase === 'investigate' ? diagnosis.suggestedNextQuestion : null;
+    reservedQuestion = questionId
+      ? QUESTION_BANK[questionId].text
+      : session.phase === 'recommend' || session.phase === 'confirm'
+        ? SAVE_QUESTION
+        : session.phase === 'intake'
+          ? 'What sales problem can I help with?'
+          : '';
+    return new SpeechGuard(
+      session,
+      env.tools.data,
+      responsePhase,
+      session.pendingCommit ? SAVED_RECEIPT : reservedQuestion,
+    );
+  };
+  const speak = async (text: string): Promise<void> => {
+    guard ??= createGuard();
+    const approved = guard.accept(text);
+    if (approved) await pipeline.push(approved);
+  };
+  try {
+    let rounds = 0;
+    const maxRounds = Math.min(4, env.maxToolRounds ?? 4);
+    for (;;) {
+      throwIfAborted(env.signal);
+      const step = requiredStep(session, env.tools);
+      if (rounds >= maxRounds && step.force)
+        throw new AppError(
+          'LLM_LOOP_LIMIT',
+          'The agent could not complete its required tool steps. Please try again.',
+          true,
+        );
+      const chunker = new SentenceChunker();
+      const result = await env.llm.stream(
+        {
+          system: `${systemPrompt(env.tools.data.seller.name)}\n\n${turnContext(session, env.tools.data, step.note, env.tools.settings)}`,
+          history: session.history.flatMap((turn) => turn.messages),
+          tools: rounds >= maxRounds ? [] : step.tools,
+          forceTools: step.force,
+        },
+        async (delta): Promise<void> => {
+          if (!metrics.llmFirstMs) metrics.llmFirstMs = now() - started;
+          if (step.force) return;
+          for (const chunk of chunker.push(delta)) await speak(chunk);
+        },
+        env.signal,
+      );
+      session.counters.llmCalls += 1;
+      metrics.llmTotalMs += result.totalMs;
+      metrics.models.push(result.model);
+      for (const key of ['input', 'output', 'thoughts'] as const) {
+        metrics.tokens[key] += result.usage[key];
+        session.counters.tokens[key] += result.usage[key];
+      }
+      history.messages.push(result.message);
+      if (!result.calls.length) {
+        if (step.force)
+          throw new AppError(
+            'PROVIDER_RESPONSE_INVALID',
+            'Gemini did not perform the required tool operation',
+          );
+        for (const chunk of chunker.flush()) await speak(chunk);
+        break;
+      }
+      if (rounds >= maxRounds)
+        throw new AppError(
+          'LLM_LOOP_LIMIT',
+          'The agent tool limit was reached. Please try again.',
+          true,
+        );
+      rounds += 1;
+      const responses: ToolResponse[] = [];
+      for (const call of result.calls) {
+        throwIfAborted(env.signal);
+        const name = toolNameSchema.safeParse(call.name);
+        if (
+          name.success &&
+          toolAllowed(session, name.data) &&
+          name.data !== 'commit_action_plan'
+        ) {
+          emit({
+            event: 'tool',
+            data: { name: name.data, label: TOOL_LABELS[name.data] },
+          });
+          metrics.tools.push(name.data);
+        }
+        const response = await executeTool(session, call, env.tools);
+        if (name.success && name.data === 'commit_action_plan' && response.ok) {
+          emit({
+            event: 'tool',
+            data: { name: name.data, label: TOOL_LABELS[name.data] },
+          });
+          metrics.tools.push(name.data);
+        }
+        responses.push({
+          name: call.name,
+          ...(call.id ? { id: call.id } : {}),
+          response,
+        });
+        emit({ event: 'state', data: sessionState(session) });
+      }
+      history.messages.push({ kind: 'tools', results: responses });
+    }
+    guard ??= createGuard();
+    for (const text of guard.complete()) await pipeline.push(text);
+    if (reservedQuestion) {
+      if (questionId)
+        askQuestion(session, questionId, domainState(session, env.tools.data));
+      await pipeline.push(reservedQuestion);
+    }
+    const finalText = [
+      ...guard.chunks,
+      reservedQuestion,
+      session.pendingCommit ? SAVED_RECEIPT : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    if (
+      !lintSpeech(
+        finalText,
+        responsePhase === 'commit' ? 'summary' : responsePhase,
+      ).ok
+    )
+      throw new AppError(
+        'SPEECH_INVALID',
+        'The agent response did not meet the speaking rules',
+      );
+    await pipeline.finish();
+    if (session.phase === 'recommend' && session.proposedPlan)
+      transition(session, 'confirm');
+    if (session.pendingCommit) {
+      // Prepare the short receipt before the irreversible append. No provider
+      // work remains between the commit point and its final state/receipt.
+      const receipt = env.tts
+        ? await pipeline.prepare(SAVED_RECEIPT)
+        : undefined;
+      await finalizeCommit(session, env.tools, env.signal);
+      transition(session, 'done');
+      env.onCommitPoint?.();
+      pipeline.publishReceipt(SAVED_RECEIPT, receipt);
+    }
+    history.spoken = finalText;
+    session.counters.ttsChars += pipeline.ttsChars;
+    trimHistory(session);
+    // The raw provider history stays intact. Appended, validated speech and
+    // question IDs are carried in the next system context, not forged content.
+    emit({ event: 'state', data: sessionState(session) });
+    metrics.ttsFirstMs = pipeline.firstTtsMs;
+    metrics.firstAudioMs = pipeline.firstAudioMs;
+    metrics.totalMs = now() - started;
+    emit({
+      event: 'done',
+      data: {
+        timings: {
+          sttMs: metrics.sttMs,
+          llmFirstMs: metrics.llmFirstMs,
+          ttsFirstMs: metrics.ttsFirstMs,
+          totalMs: metrics.totalMs,
+        },
+        turn: session.turn,
+      },
+    });
+    return metrics;
+  } catch (error: unknown) {
+    lifetime.abort();
+    await pipeline.cancel();
+    throw error;
+  }
+}

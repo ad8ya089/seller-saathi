@@ -79,3 +79,9 @@ export function trimHistory(session: Session, maxMessages = 12): void {
   )
     session.history.shift();
 }
+export function replaceSession(base: Session, draft: Session): void {
+  delete base.proposedPlan;
+  delete base.pendingCommit;
+  delete base.committedPlan;
+  Object.assign(base, draft);
+}

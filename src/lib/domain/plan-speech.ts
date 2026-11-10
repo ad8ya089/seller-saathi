@@ -29,15 +29,20 @@ export function spokenActionTitles(plan: ActionPlan): string[] {
 export function planSummary(
   plan: ActionPlan,
   issue: Hypothesis = 'STOCK',
+  acceptedActionIds?: readonly string[],
 ): string {
-  const actions = plan.actions.map((action) => {
-    const title = SHORT_ACTIONS[action.id];
-    if (action.id !== 'A_RESTOCK_TOP' && action.id !== 'A_DISPATCH_SLA')
-      return title;
-    const due =
-      ACTION_CATALOG.find((entry) => entry.id === action.id)?.dueDays ?? 0;
-    return `${title} in ${spokenNumber(due)} days`;
-  });
+  const actions = plan.actions
+    .filter(
+      (action) => !acceptedActionIds || acceptedActionIds.includes(action.id),
+    )
+    .map((action) => {
+      const title = SHORT_ACTIONS[action.id];
+      if (action.id !== 'A_RESTOCK_TOP' && action.id !== 'A_DISPATCH_SLA')
+        return title;
+      const due =
+        ACTION_CATALOG.find((entry) => entry.id === action.id)?.dueDays ?? 0;
+      return `${title} in ${spokenNumber(due)} days`;
+    });
   const last = actions.pop();
   const list = actions.length
     ? `${actions.join(', ')} and ${last ?? ''}`
