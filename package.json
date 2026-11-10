@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify-data": "node scripts/pending.mjs verify-data P1",
+    "verify-data": "node --conditions=react-server --import tsx scripts/verify-data.ts",
     "smoke:sarvam": "node scripts/pending.mjs smoke:sarvam P2",
     "smoke:gemini": "node scripts/pending.mjs smoke:gemini P3",
     "chat": "node scripts/pending.mjs chat P3",
