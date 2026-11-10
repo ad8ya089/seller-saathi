@@ -6,6 +6,12 @@ export const operationalTurnSchema = z.strictObject({
   status: z.enum(['success', 'failed', 'interrupted']),
   errorCode: z.string().nullable(),
   metrics: z.strictObject({
+    historyBytes: z
+      .strictObject({
+        before: z.number().nonnegative(),
+        after: z.number().nonnegative(),
+      })
+      .optional(),
     providerModels: z
       .strictObject({ stt: z.string(), tts: z.string() })
       .optional(),

@@ -92,6 +92,10 @@ const environmentSchema = z.object({
   MAX_UTTERANCE_MS: integer(28000, 1, 30000),
   MAX_QUESTIONS: integer(3, 2, 3),
   MAX_TOOL_ROUNDS: integer(4, 1, 4),
+  COMPACT_TOOL_HISTORY: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
   DATA_DIR: z.string().trim().min(1).default('.data'),
   MOCK_DATA_DIR: z.string().trim().min(1).default('data'),
   DEMO_ACCESS_CODE: optionalText,
@@ -160,6 +164,7 @@ export interface AppConfig {
   maxUtteranceBytes: number;
   maxUtteranceMs: number;
   maxToolRounds: number;
+  compactToolHistory: boolean;
   dataDir: string;
   mockDataDir: string;
   demoAccessCode: string | undefined;
@@ -236,6 +241,7 @@ export function parseConfig(
     maxUtteranceBytes: env.MAX_UTTERANCE_BYTES,
     maxUtteranceMs: env.MAX_UTTERANCE_MS,
     maxToolRounds: env.MAX_TOOL_ROUNDS,
+    compactToolHistory: env.COMPACT_TOOL_HISTORY,
     dataDir: env.DATA_DIR,
     mockDataDir: env.MOCK_DATA_DIR,
     demoAccessCode: env.DEMO_ACCESS_CODE,

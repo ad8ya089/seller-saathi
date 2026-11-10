@@ -47,6 +47,7 @@ async function main(): Promise<void> {
     Promise.resolve({
       llm,
       maxToolRounds: config.maxToolRounds,
+      compactToolHistory: config.compactToolHistory,
       tools: {
         data,
         settings: config,

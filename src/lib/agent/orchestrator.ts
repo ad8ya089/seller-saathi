@@ -1,3 +1,4 @@
+import { compactToolHistory } from '@/lib/agent/history';
 import { z } from 'zod';
 import { AppError } from '@/lib/errors';
 import { SentenceChunker } from '@/lib/agent/chunker';
@@ -44,6 +45,7 @@ export interface TurnMetrics {
   ttsFirstMs: number;
   firstAudioMs: number;
   totalMs: number;
+  historyBytes?: { before: number; after: number };
   providerModels?: { stt: string; tts: string };
   usageComplete?: boolean;
   ttsChars?: number;
@@ -60,6 +62,7 @@ export interface TurnEnvironment {
   tools: ToolEnvironment;
   signal: AbortSignal;
   maxToolRounds?: number;
+  compactToolHistory?: boolean;
   onCommitPoint?: () => void;
   onMetrics?: (metrics: TurnMetrics) => void;
   onTool?: (call: FunctionRequest, result: ToolResult) => void;
@@ -323,6 +326,8 @@ export async function runTurn(
     }
     history.spoken = finalText;
     session.counters.ttsChars += pipeline.ttsChars;
+    if (env.compactToolHistory)
+      metrics.historyBytes = compactToolHistory(session);
     trimHistory(session);
     // The raw provider history stays intact. Appended, validated speech and
     // question IDs are carried in the next system context, not forged content.

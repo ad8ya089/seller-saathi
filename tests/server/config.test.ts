@@ -32,6 +32,14 @@ describe('environment configuration', () => {
     expect(config.sessionTtlMs).toBe(1_800_000);
     expect(config.maxUtteranceMs).toBe(28_000);
     expect(config.dataDir).toBe('.data');
+    expect(config.compactToolHistory).toBe(false);
+  });
+
+  it('requires explicit opt-in for tool-history compaction pending live acceptance validation', () => {
+    expect(
+      parseConfig({ COMPACT_TOOL_HISTORY: 'true' }).compactToolHistory,
+    ).toBe(true);
+    expect(() => parseConfig({ COMPACT_TOOL_HISTORY: 'yes' })).toThrow();
   });
 
   it('treats blank optional keys and access codes as absent', () => {

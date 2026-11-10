@@ -43,6 +43,7 @@ export class AppRuntime implements AgentServices {
       stt: this.voice.stt,
       tts: this.limitedTts,
       maxToolRounds: this.config.maxToolRounds,
+      compactToolHistory: this.config.compactToolHistory,
       tools: await this.toolEnvironment(),
     }),
     Date.now,
