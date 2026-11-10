@@ -137,8 +137,8 @@ export function DiagnosisPanel({
       </div>
       <p className="text-xs leading-5 text-slate-500">
         Bars use the observed score range, {number(geometry.min)} to{' '}
-        {number(geometry.max)}. Negative evidence can lower a score. Detail
-        evidence appears when the server completes the findings checks.
+        {number(geometry.max)}. Negative evidence can lower a score. Product and
+        cancellation evidence appears as your KAM completes the findings checks.
       </p>
       <section
         className="rounded-xl border border-slate-200 bg-slate-50 p-4"

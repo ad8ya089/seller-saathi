@@ -210,7 +210,7 @@ export function SnapshotPanel({
           ))}
         </div>
         <figcaption className="mt-4 text-xs leading-5 text-slate-500">
-          The server separates the effect of order volume from the effect of
+          This bridge separates the effect of order volume from the effect of
           selling prices. These are gross placed sales, including cancelled
           orders.
         </figcaption>
