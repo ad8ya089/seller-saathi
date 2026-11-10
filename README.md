@@ -1,6 +1,6 @@
 # SellerSaathi — Snapdeal Virtual KAM
 
-## Implementation status — P4 seller recovery dashboard
+## Implementation status — P5 hardening and pilot measurements
 
 SellerSaathi runs the seller recovery conversation: local Silero VAD → WAV → Sarvam STT → Gemini function calls → guarded deterministic domain tools → sentence-streamed Sarvam TTS → Web Audio. The responsive dashboard pairs that conversation with Snapshot, Diagnosis and Recovery Plan tabs. Metrics, evidence, confidence, seller statements and commitments update from server data. Server sessions enforce phases, three investigation questions, eligible plans and explicit acceptance before a JSONL commitment. All seller data is mock data; saved plans do not change Snapdeal systems.
 
@@ -12,23 +12,38 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:3000/?debug=1` in Chrome. Click Call, allow the microphone and hear the AI greeting. Explain a sales drop, answer the stock and restock questions, review the spoken plan and explicitly accept it. Capture pauses during processing/playback and resumes after a short cooldown. End Call cancels server work and releases microphone tracks. English-India is the P3 call language. Localhost or HTTPS is required for microphone access. Debug measures the last VAD speech frame to scheduled playback; device output delay is not measured.
+Open `http://localhost:3000/?debug=1` in Chrome. Click Call, allow the microphone and hear the AI greeting. Explain a sales drop, answer the stock and restock questions, review the spoken plan and explicitly accept it. Interruptions are enabled by default. Turn off Allow interruptions to use half-duplex capture, which pauses during processing/playback and resumes after a short cooldown. End Call cancels server work and releases microphone tracks. English-India is the P3 call language. Localhost or HTTPS is required for microphone access. Debug measures the last VAD speech frame to scheduled playback; device output delay is not measured.
 
-Use the tabs alongside the call to inspect the business comparison, evidence behind each hypothesis and action owners/dates. Confirm Plan and Not Now use the existing guarded API. Saved status appears only after server confirmation; the accepted actions and actual follow-up date are read from the ledger. The footer contains the documented assumptions. Hindi remains disabled and there is no barge-in control. P3's measured Chrome median first audio of **11.77 seconds** remains the P4 baseline.
+Use the tabs alongside the call to inspect the business comparison, evidence behind each hypothesis and action owners/dates. Confirm Plan and Not Now use the existing guarded API. Saved status appears only after server confirmation; the accepted actions and actual follow-up date are read from the ledger. The footer contains the documented assumptions. Hindi remains disabled. P3's measured Chrome median first audio was **11.77 seconds**. The P5 single-turn HTTP pilot measured **13.93 seconds**, with a different measurement boundary; no voice-latency improvement or twenty-sample gate is claimed. See the [P5 report](docs/p5-report.md).
 
 `npm ci` copies pinned VAD/ONNX assets into ignored `public/vad/` through postinstall; the app configures local URLs for all four assets. `npm run smoke:sarvam` makes a bounded live audition (five TTS + four STT calls), saves ignored WAVs under `.data/audition/`, and records observed results in [provider notes](docs/provider-notes.md). Ordinary tests use fakes and reject live network calls.
 
 Production locally: `npm run build`, then `npm start`. Startup copies static assets and mock data into the generated standalone directory and launches its server. Set `PORT` and `HOSTNAME` in `.env` or the shell. Set an absolute `DATA_DIR` when sharing the same ledger between development, CLI and standalone: the generated standalone server changes its working directory. Run `npm run lint`, `npm run typecheck`, `npm test`, `npm run verify-data`, and `npm run build` for verification. `npm run test:watch` starts Vitest watch mode.
 
-`/api/health` reports provider **configuration**, not connectivity, and the live in-memory session count. It returns HTTP 200 with absent optional credentials and HTTP 503 for invalid explicit configuration. `/api/session` creates the UUID used by `/api/turn`; every turn also needs a client UUID `turnId`. Identical retries replay for 60 seconds. Sessions are process-local and capped at 25 turns, ten active minutes and a 30-minute TTL. `DATA_DIR` is writable ledger storage; `MOCK_DATA_DIR` is the read-only fixture source. Server modules use the `server-only` marker.
+`/api/health` reports provider **configuration**, not connectivity, and the live in-memory session count. It returns HTTP 200 with absent optional credentials and HTTP 503 for invalid explicit configuration. `/api/session` creates the UUID used by `/api/turn`; every turn also needs a client UUID `turnId`. Identical retries replay for 60 seconds within a bounded audio cache. An expired/evicted ID is rejected without repeating provider work. Sessions are process-local and capped at 25 turns, ten active minutes and a 30-minute idle TTL. Accepted attempts also consume the process-local daily budget, resetting at midnight Asia/Kolkata; it resets on restart. `DATA_DIR` is writable ledger storage; `MOCK_DATA_DIR` is the read-only fixture source. Server modules use the `server-only` marker.
 
-`npm run chat` opens the real Gemini text REPL. `npm run chat -- --scenario S1` runs the scripted seller acceptance check without speech providers and writes its synthetic trace under ignored `.data/chat/`. `npm run smoke:gemini` verifies a small signed function-call round trip on the configured primary model; `-- --fallback` explicitly tests the configured fallback. Both commands use paid providers. Ordinary tests use fakes. `eval` and `bench` remain P5 placeholders. See the [P3 report](docs/p3-report.md) for real-provider traces, measured latency and manual-check limits.
+`npm run chat` opens the real Gemini text REPL. `npm run chat -- --scenario S1` runs the scripted seller acceptance check without speech providers and writes its synthetic trace under ignored `.data/chat/`. `npm run smoke:gemini` verifies a small signed function-call round trip on the configured primary model; `-- --fallback` explicitly tests the configured fallback. Both commands use paid providers. Ordinary tests use fakes. `eval` and `bench` now provide bounded real-provider runners. They print preflight usage and require `--confirm-spend`; ordinary tests remain offline. See the [P3 report](docs/p3-report.md) for real-provider traces, measured latency and manual-check limits.
 
-After `npm run build`, run `npm run test:browser` for the P4 Chrome smoke suite. It starts a separate standalone server on port 4200 with provider keys empty and mocks requests in Playwright only. It requires Google Chrome installed. Production has no fake-provider activation path. Screenshots, accessibility scores and the P4 verification details are in the [P4 report](docs/p4-report.md).
+After `npm run build`, run `npm run test:browser` for the dashboard and P5 interruption Chrome suite. It starts a separate standalone server on port 4200 with provider keys empty and mocks requests in Playwright only. It requires Google Chrome installed. Production has no fake-provider activation path. Screenshots, accessibility scores and the P4 verification details are in the [P4 report](docs/p4-report.md).
 
 See [P1 decisions](docs/p1-decisions.md) for resolved documentation conflicts and policy choices. The design pack below describes the complete planned application, including work beyond P1.
 
 Voice-first **Seller Recovery Agent**: a seller says "my sales dropped"; the bot reads their numbers, finds the real driver, asks ≤3 plan-changing questions, proposes 2–3 owned actions, saves the plan on a verified spoken "yes", and sets a 7-day review.
+
+## P5 controls and paid runners
+
+The server caches six English recovery clips and the greeting, limits TTS to two shared slots, limits unverified peers to a shared token bucket unless a trusted proxy identifies their IP, and enforces the daily attempt cap before providers. Optional access codes are entered by the user and checked on the server. Set `INTERNAL_METRICS_TOKEN` privately for bearer-authenticated `/api/health?verbose=1`; Host/forwarded headers never grant verbose access. Debug reads actual per-session metrics. No exchange rate or missing bill is invented.
+
+```sh
+npm run eval -- --preflight
+npm run eval -- --persona S1 --runs 1 --max-tokens 600000 --max-requests 60 --confirm-spend
+npm run bench -- --count 1 --preflight
+npm run bench -- --count 1 --base-url http://localhost:3000 --generate-fixtures --confirm-spend
+```
+
+Run paid commands only after reviewing their preflight and approving the spend. The full scope is nine supported personas times three runs (27); S8 belongs to P7. The interim gate is 25/27; the original 27/30 release gate remains pending. WAV generation skips existing fixtures and validates 3–8 second PCM recordings. Private evaluation ledgers/traces and benchmark details stay under ignored `.data/`. The selected synthetic recording in `tests/fixtures/voice/` is deliberately committed. `COMPACT_TOOL_HISTORY=false` is the default. The opt-in completed-tool summary reduced history bytes in the pilot, but that evaluation failed before saving; it remains disabled pending a successful live acceptance check. Model Content, signatures, proposals and commitment results remain preserved in either mode.
+
+The cost/infra figures in the original design pack below are historical planning inputs. Current model-specific price units, verification dates and measurement limits are recorded in the P5 report.
 
 ## Files
 | File | Purpose |
@@ -68,4 +83,4 @@ Cascaded voice pipeline · Sarvam Saaras STT + Bulbul TTS · Gemini 3.5 Flash-Li
 - Brief's "1–2 hours expected effort" vs this scope: the core path (P1–P3 + minimal UI) already satisfies the brief; everything after is differentiation. Don't let it threaten the deadline.
 
 ## Start
-P1–P4 are implemented locally. Start the English-India dashboard/call preview or run the real Gemini S1 text scenario. P5 and later phases remain out of scope for this change.
+P1–P4 and the P5 hardening/harness implementation are local. Paid runs were limited to pilots at the user's request: the full 27-run persona gate, 20-turn benchmark and remaining recordings are pending. The approved S1 simulator pilot failed (0/1); its explicit-consent rejection was fixed offline and awaits a live rerun. The separate scripted S1 baseline passed. Physical speaker/headphone QA is unverified. P6 has not started.

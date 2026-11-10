@@ -2,6 +2,8 @@
 
 Two axes (per EVA-style thinking): **accuracy/behaviour** (did it diagnose, ask, plan, commit correctly?) and **experience** (does it feel like a natural voice call?). A great voice with a wrong plan scores badly; a right plan with 8 s silences also does.
 
+P5 execution status: the user approved one S1 simulator pilot and one voice-turn pilot only. The simulator pilot failed (0/1); the separate scripted S1 baseline passed. The supported interim scope is S1–S7/S9/S10 × three = 27, with a 25/27 gate; S8 remains P7 and the original 27/30 release gate below is pending. The one-sample HTTP first-audio pilot was 13.93 seconds; the full twenty-turn gate and physical device QA are pending. See [P5 report](p5-report.md).
+
 ## 1. Pyramid
 
 | Layer | Tool | What | Gate |

@@ -2,7 +2,7 @@
 
 One Next.js (TypeScript) service, long-lived Node container. No DB, no queue, no vector store, no agent framework.
 
-P4 status: the P3 server path remains unchanged: sessions, real Gemini function calling, seven guarded tools, deterministic phases and JSONL commitments. The browser now uses a typed reducer and a responsive voice console beside Snapshot, Diagnosis and Recovery Plan tabs. Existing session/SSE/confirmation/ledger contracts are preserved. A server-only display projection reads existing domain evidence tables; React does not compute diagnoses or eligibility. Accepted action details and the actual checkpoint date come from the ledger after server-confirmed commitment. Debug values remain observed or explicitly unavailable. Barge-in, fillers, deployment and Hindi remain later phases. See [P4 report](p4-report.md) and [P3 report](p3-report.md); the diagrams below also contain future design elements.
+P5 status: the P4 dashboard and guarded P3 agent remain. Full-duplex interruption with a half-duplex fallback, completed-sentence receipts, interruption-safe consent, cached recovery clips, bounded replay, rate/daily admission, structured metrics and restricted verbose health are implemented. Experimental completed-tool summarization is disabled by default after the S1 simulator pilot failed before saving; raw signed model Content and call IDs remain intact. Real-provider evaluation/benchmark runners require spend confirmation and isolate their ledgers. The user approved pilots only; the full 27-run/20-turn gates and physical device QA remain pending. See [P5 report](p5-report.md). No P6 deployment or Hindi mode was added; diagrams below retain future design elements.
 
 ## 1. Component view
 
@@ -73,7 +73,7 @@ sequenceDiagram
 | TTS first sentence | 500–800 ms | keep first sentence short |
 | **Total** | **≈2.6–3.7 s** | Ceiling 5 s. Filler clip plays at +1.5 s if nothing yet |
 
-Levers in order: shorten first sentence → lower thinking → drop hangover to 550 ms → Sarvam streaming (WS) STT/TTS (documented upgrade path, not v1).
+P5 measured one local HTTP pilot at 13.93 seconds to first response audio; the full twenty-sample 3.7-second p50 / six-second p95 gate is pending. Gemini serial tool rounds/retry dominate. MINIMAL thinking is already configured; VAD redemption remains 700 ms pending physical pause testing. Future experiments must preserve evidence and confirmation guards. See the P5 report for measurement boundaries.
 
 ## 3. API contracts
 
@@ -82,10 +82,10 @@ All JSON validated with zod at the boundary. Same-origin only.
 ### `POST /api/session`
 Req: `{ lang: "en-IN" | "hi-IN", mode?: "call" | "followup", planId?: string }`
 Res: `{ sessionId, greeting: { text, audioB64, mime: "audio/wav" }, snapshot: SellerSnapshotDTO, config: { maxUtteranceMs: 28000, bargeIn: boolean, maxQuestions: 3 } }`
-Greeting audio pre-synthesised at server start per language and cached (instant start, zero cost per call).
+P5 supports English call mode only; Hindi/follow-up remain future phases. Greeting warming is cached and coalesced, with bounded retry after failure. A cold request may wait or fail; a warm request reuses generated audio without another synthesis charge. Optional access gates and missing provider configuration suppress unauthenticated prewarming.
 
 ### `POST /api/turn` → `text/event-stream`
-Req (multipart): `sessionId`, `audio` (wav) **or** JSON `{sessionId, text}`; optional `playedSentences: number` (for interruption).
+Req (multipart): `sessionId`, `turnId` (UUID), `audio` (wav) **or** JSON `{sessionId, turnId, text}`; optional `playedSentences: integer` in 0..16 counts actually completed response sentences for interruption. Original signed model Content remains intact; heard speech and an interruption marker are separate metadata.
 SSE events (each `event:` + JSON `data:`):
 
 | event | data |
@@ -103,12 +103,15 @@ SSE events (each `event:` + JSON `data:`):
 `{ sessionId, planId, decision: "accept" | "decline" }` → same guard as voice commit (plan must exist). Returns `state`.
 
 ### `GET /api/health`
-`{ ok, version, uptimeS, providers: { gemini: bool, sarvam: bool }, sessions: n }` (no secrets). Used by compose healthcheck.
+`{ ok, version, uptimeS, providers: { gemini: bool, sarvam: bool }, sessions: n }` (no secrets). Provider flags mean configuration, not network connectivity. Compose/proxy deployment is P6. Verbose requires bearer `INTERNAL_METRICS_TOKEN`, including localhost; unauthorized callers get 404.
+
+### P5 read/telemetry endpoints
+`GET /api/clips` returns cache readiness and available validated clips (optional access gate). `GET /api/metrics?sessionId=...` returns the latest actual turn report for that session capability. `POST /api/metrics` records a deduplicated filler-play attempt, with origin/access/session validation. These do not add normal conversation turns.
 
 ### `GET /api/ledger`
 Latest 20 committed plans (demo only).
 
-## 4. Session model (server memory, TTL 30 min, Map)
+## 4. Session model (server memory, idle TTL 30 min, Map)
 
 ```ts
 type Phase = "greeting"|"intake"|"findings"|"investigate"|"recommend"|"confirm"|"commit"|"summary"|"done";
@@ -125,7 +128,7 @@ interface Session {
   counters: { sttCalls: number; ttsChars: number; llmCalls: number };
 }
 ```
-History is trimmed to the last ~12 messages plus a compact facts summary; tool results are summarised after use.
+History is trimmed by whole seller turns to about twelve messages, never through a signed tool exchange. Current deterministic facts are supplied in trusted context. Experimental successful/consumed tool-result summaries retain signed model objects and are disabled by default (`COMPACT_TOOL_HISTORY=false`) after the incomplete S1 pilot; see the P5 report. Playback metadata tracks completed speech independently. The original P3 store used age-from-creation for TTL; P5 corrects this to idle activity without changing the separate ten-minute active or 25-turn caps.
 
 ## 5. Tools (Gemini function declarations; executed in-process)
 
@@ -168,7 +171,7 @@ All adapters implement small interfaces (`SttProvider`, `TtsProvider`, `LlmProvi
 - vad-web (Silero v6): start `positiveSpeechThreshold 0.5, negativeSpeechThreshold 0.35, minSpeechMs 250, preSpeechPadMs 300, redemption ≈700 ms` (names per installed version); assets self-hosted in `/public/vad` (copied by postinstall) — no CDN at runtime.
 - On `onSpeechEnd(audio)` → WAV 16 kHz mono PCM16 → `/api/turn`. Cap utterance 28 s.
 - Playback: Web Audio, schedule buffers back-to-back (`start(nextTime)`), single `AudioContext` unlocked on the Call click.
-- **Barge-in:** on `onSpeechStart` while speaking → `stopAll()`, `AbortController.abort()` the SSE, send `playedSentences` with next turn so the server truncates the assistant message in history to what was heard. During playback raise threshold to 0.6 to limit self-echo; toggle to half-duplex (VAD paused while speaking).
+- **Barge-in:** on installed `onSpeechRealStart` (confirmed 250 ms speech) while processing/speaking → `stopAll()`, abort only the active turn, send completed-only `playedSentences` with the next utterance. Heard text is truncated separately from signed Content; an unheard proposal is invalidated and must be presented again before later acceptance. During playback raise threshold to 0.6 to limit self-echo; toggle to half-duplex (VAD paused while speaking).
 - State machine: `idle → listening → processing → speaking → listening`.
 
 ## 9. Failure handling matrix
@@ -176,26 +179,28 @@ All adapters implement small interfaces (`SttProvider`, `TtsProvider`, `LlmProvi
 | Failure | User sees/hears | Recovery |
 |---|---|---|
 | Mic denied | banner + text box; KAM still speaks | text path through same `/api/turn` |
-| Empty/low STT | "Sorry, I didn't catch that — could you say it again?" (cached audio) | no history pollution; retry counter ≤2 then suggest text |
+| Empty/invalid STT | "Sorry, I didn't catch that — could you say it again?" (cached audio) | no history pollution; retry counter ≤2 then suggest text |
 | STT 429/5xx | brief "one moment" filler | 1 retry → text fallback hint |
-| LLM timeout/5xx | filler → retry on fallback model | after 2 fails: cached apology + stay in phase |
+| LLM timeout/5xx | filler → one primary retry → configured fallback | after bounded attempts: cached/browser apology + unchanged draft phase |
 | Malformed tool args | none (model self-corrects from `{ok:false,error}`) | loop cap 4 |
 | TTS fail on a sentence | browser TTS speaks it; subtle banner | log + counter |
-| SSE drop mid-turn | transcript kept; "Let me try again" | client retries once with same text; server idempotency key per (session, turn) |
-| Session expired/unknown | "Let's start a new call" | auto-create session |
+| SSE drop mid-turn | transcript kept; "Let me try again" | client retries once with same UUID/payload and suppresses delivered replay prefix |
+| Session expired/unknown | "Let's start a new call" | offer a new call |
 | Caps hit (turns/time/daily budget) | polite wrap-up audio | no further provider calls |
 | Prompt injection / unsafe commit | normal reply, no save | server guards reject |
 
-Idempotency: `turnId` (client UUID) → server caches last response events for 60 s to avoid double-billing on retries.
+Idempotency: `turnId` (client UUID) → server caches events for 60 seconds within 32 MiB. Fingerprint tombstones reject expired/evicted IDs without provider work; changed content under one ID is rejected. Filler/cached reprompt playback never becomes signed history or response-latency evidence. STT language confidence is not transcript confidence; no unsupported low-confidence threshold is used.
 
 ## 10. Security & abuse control (public URL, paid APIs)
-- Keys only on server (SSM → `.env` 0600 at boot). Nothing sensitive in `NEXT_PUBLIC_*`.
-- No access-code wall by default (evaluators shouldn't be blocked). Controls instead: per-IP token bucket (40 turns / 10 min), session cap 25 turns / 10 min, global daily cap `DAILY_TURN_CAP=800` (returns spoken wrap-up + banner), 1 MB audio cap, MIME sniff (RIFF/WAVE), zod everywhere, same-origin check on POSTs. Optional `DEMO_ACCESS_CODE` flips a gate if abused.
+- Keys only on server, parsed once in config. Nothing sensitive in `NEXT_PUBLIC_*`. SSM/boot secret provisioning is future P6 work.
+- No access-code wall by default (evaluators shouldn't be blocked). Controls instead: per-IP token bucket (40 turns / 10 min), session cap 25 turns / 10 min, global daily cap `DAILY_TURN_CAP=800` (returns spoken wrap-up + banner), 1 MB audio cap, MIME sniff (RIFF/WAVE), zod everywhere, same-origin check on POSTs. Optional `DEMO_ACCESS_CODE` flips a gate if abused. P5 counts accepted attempts before providers, uses Asia/Kolkata midnight reset and keeps the daily counter in memory (restart resets it). Because this route has no authenticated socket peer IP, unverified peers share a conservative bucket; only `TRUSTED_PROXY_TOKEN` allows validated `X-Real-IP` identity. Arbitrary forwarding headers do not select buckets.
 - Security headers via Caddy (HSTS, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy: microphone=(self)`), CSP allowing `'self'`, `wasm-unsafe-eval`/`blob:` for ONNX/worklet.
 - Logs: pino JSON; session id, turn, timings, tool names, error codes. `LOG_TRANSCRIPTS=false` default.
 
 ## 11. Observability (3 AM view, even for a demo)
-Per turn: `sttMs, llmFirstMs, llmTotalMs, ttsFirstMs, firstAudioMs, tools[], phase, tokens{in,out}`. In-memory counters exposed at `/api/health?verbose=1` (localhost only via Caddy block): turns, errors by code, fallbacks, p50/p95 firstAudioMs, estimated cost (₹) per session and today. `?debug=1` overlay shows the same live.
+Per turn: monotonic `sttMs, llmFirstMs, llmTotalMs, ttsFirstMs, firstAudioMs, totalMs`, tools, phase, actual provider/model IDs, reported input/output/thought tokens, TTS characters, usage completeness, provider retries/fallbacks and interrupted/error status. In-memory verbose counters include accepted/successful/failed/interrupted turns, errors, fallbacks, tokens/characters, filler attempts and successful-audio p50/p95. Lifetime counters reset on restart; latency samples retain the last 4,096 accepted turns, latest reports at most 2,048 sessions. Debug consumes actual per-session reports, with unavailable values explicit.
+
+Pricing is a single validated model-specific table with source/date and USD-per-million-token / INR-per-minute / INR-per-thousand-character units; `PROVIDER_PRICING_JSON` can override it. Combined session/day estimates remain null when failed-attempt usage, model allocation or exchange rate is missing. Never invent an INR conversion. Verbose access requires an explicit internal bearer because Host cannot authenticate localhost. The future P6 Caddy configuration must also block public verbose access; it is not created in P5.
 
 ## 12. Repo layout
 

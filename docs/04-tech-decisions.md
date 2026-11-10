@@ -64,7 +64,9 @@ Each decision: **choice → why → rejected → revisit if**. Verified-today it
 ### D11 — Keep scope inside the brief
 - Cut from the earlier plan: Seller Health Score (replaced by live hypothesis panel), localStorage sessions (server state needed for SSE), WebSocket realtime stack, multi-seller anything.
 
-## Cost model
+## Historical cost model
+
+P5 runtime pricing supersedes these planning estimates. See [P5 measured costs and verification dates](p5-report.md#models-tokens-and-cost) and `src/lib/server/cost.ts`; no exchange rate is assumed by the app. The tables below retain the original planning assumptions, not a measured invoice.
 
 Rates ✔: Sarvam STT ₹30/hour (per second), Bulbul v3 ₹30 per 10K chars (₹3 per 1K), Gemini 3.5 Flash-Lite $0.30 in / $2.50 out per 1M, cache read $0.03. FX assumed ₹88/$.
 
