@@ -54,6 +54,7 @@ describe('append-only committed-plan ledger', () => {
       ['second'],
     );
     expect(await getLatestPlan('first', nested)).toEqual(record('first'));
+    expect(await listLatest(0, nested)).toEqual([]);
   });
   it('returns an empty history for a new ledger', async () => {
     expect(await listLatest(20, directory)).toEqual([]);

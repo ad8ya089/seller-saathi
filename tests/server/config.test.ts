@@ -1,7 +1,30 @@
-import { describe, expect, it } from 'vitest';
+import { readFile } from 'node:fs/promises';
+import { parseEnv } from 'node:util';
+import { describe, expect, it, vi } from 'vitest';
 import { parseConfig } from '@/lib/server/config';
 
 describe('environment configuration', () => {
+  it('validates the checked-in example without credentials', async () => {
+    const environment = parseEnv(await readFile('.env.example', 'utf8'));
+    expect(parseConfig(environment).providers).toEqual({
+      gemini: false,
+      sarvam: false,
+    });
+  });
+
+  it('parses runtime configuration only once', async () => {
+    vi.resetModules();
+    vi.stubEnv('PORT', '3000');
+    try {
+      const { getConfig } = await import('@/lib/server/config');
+      const initial = getConfig();
+      vi.stubEnv('PORT', '4100');
+      expect(getConfig()).toBe(initial);
+      expect(getConfig().port).toBe(3000);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
   it('allows local development without credentials', () => {
     const config = parseConfig({});
     expect(config.providers).toEqual({ gemini: false, sarvam: false });
