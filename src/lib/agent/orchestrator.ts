@@ -39,6 +39,10 @@ export interface TurnMetrics {
   ttsFirstMs: number;
   firstAudioMs: number;
   totalMs: number;
+  usageComplete?: boolean;
+  ttsChars?: number;
+  fallbacks?: number;
+  providerFallbacks?: { stt: number; tts: number; llm: number };
   tools: string[];
   models: string[];
   tokens: { input: number; output: number; thoughts: number };
@@ -51,6 +55,7 @@ export interface TurnEnvironment {
   signal: AbortSignal;
   maxToolRounds?: number;
   onCommitPoint?: () => void;
+  onMetrics?: (metrics: TurnMetrics) => void;
   now?: () => number;
 }
 export async function runTurn(
@@ -64,12 +69,14 @@ export async function runTurn(
   const now = env.now ?? performance.now.bind(performance);
   const started = now();
   const metrics: TurnMetrics = {
+    usageComplete: true,
     sttMs: 0,
     llmFirstMs: 0,
     llmTotalMs: 0,
     ttsFirstMs: 0,
     firstAudioMs: 0,
     totalMs: 0,
+    providerFallbacks: { stt: 0, tts: 0, llm: 0 },
     tools: [],
     models: [],
     tokens: { input: 0, output: 0, thoughts: 0 },
@@ -90,10 +97,16 @@ export async function runTurn(
     .strictObject({
       text: z.string().trim().min(1).max(8000),
       ms: z.number().nonnegative(),
+      attempts: z.number().int().positive().optional(),
     })
     .safeParse(transcript);
   if (!parsed.success)
     throw new AppError('NO_SPEECH', 'No usable seller speech was recognized');
+  if (metrics.providerFallbacks)
+    metrics.providerFallbacks.stt = Math.max(
+      0,
+      (parsed.data.attempts ?? 1) - 1,
+    );
   session.lastUserText = parsed.data.text;
   metrics.sttMs = parsed.data.ms;
   emit({
@@ -170,6 +183,13 @@ export async function runTurn(
       session.counters.llmCalls += 1;
       metrics.llmTotalMs += result.totalMs;
       metrics.models.push(result.model);
+      metrics.usageComplete =
+        metrics.usageComplete === true && result.usageComplete === true;
+      if (metrics.providerFallbacks)
+        metrics.providerFallbacks.llm += Math.max(
+          0,
+          (result.attempts ?? 1) - 1,
+        );
       for (const key of ['input', 'output', 'thoughts'] as const) {
         metrics.tokens[key] += result.usage[key];
         session.counters.tokens[key] += result.usage[key];
@@ -287,5 +307,17 @@ export async function runTurn(
     lifetime.abort();
     await pipeline.cancel();
     throw error;
+  } finally {
+    metrics.totalMs = now() - started;
+    metrics.ttsChars = pipeline.ttsChars;
+    if (metrics.providerFallbacks)
+      metrics.providerFallbacks.tts = pipeline.fallbacks + pipeline.retries;
+    metrics.fallbacks = Object.values(metrics.providerFallbacks ?? {}).reduce(
+      (total, value) => total + value,
+      0,
+    );
+    metrics.ttsFirstMs = pipeline.firstTtsMs;
+    metrics.firstAudioMs = pipeline.firstAudioMs;
+    env.onMetrics?.(metrics);
   }
 }

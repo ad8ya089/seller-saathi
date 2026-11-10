@@ -1,4 +1,7 @@
 import 'server-only';
+import { getMetrics } from '@/lib/server/metrics';
+import { AudioCache } from '@/lib/server/audio-cache';
+import { DailyBudget, TokenBucket } from '@/lib/server/rate-limit';
 import { randomUUID } from 'node:crypto';
 import { getConfig } from '@/lib/server/config';
 import { getLogger } from '@/lib/server/logger';
@@ -19,6 +22,16 @@ export class AppRuntime implements AgentServices {
   readonly sessions = getSessionStore(this.config);
   private readonly voice = createSarvamProviders(this.config.sarvam);
   private readonly llm = new Gemini(this.config.gemini);
+  readonly limiter = new TokenBucket(
+    this.config.rateLimitTurns,
+    this.config.rateLimitWindowMs,
+  );
+  readonly budget = new DailyBudget(this.config.dailyTurnCap);
+  readonly clips = new AudioCache(
+    this.voice.tts,
+    { ...this.config.sarvam.tts, language: 'en-IN' },
+    this.config.providers.sarvam,
+  );
   readonly greeting = new GreetingCache(this.voice.tts);
   private loaded: Promise<SellerData> | undefined;
   readonly turns = new TurnService(
@@ -32,7 +45,18 @@ export class AppRuntime implements AgentServices {
     }),
     Date.now,
     (report) => {
-      getLogger().info(report, 'Agent turn completed');
+      const value = getMetrics().record(
+        report.sessionId,
+        report.turn,
+        report.phase ?? 'unknown',
+        report.status ?? 'success',
+        report.errorCode ?? null,
+        report.metrics,
+      );
+      getLogger().info(value, 'Agent turn finished');
+    },
+    () => {
+      this.budget.accept();
     },
   );
   data(): Promise<SellerData> {
@@ -53,8 +77,14 @@ export class AppRuntime implements AgentServices {
   ledger(): ReturnType<AgentServices['ledger']> {
     return listLatest(20, this.config.dataDir);
   }
+  warmClips(): void {
+    if (this.budget.snapshot().accepted < this.config.dailyTurnCap)
+      void this.clips.warm();
+  }
   warmGreeting(): void {
-    if (!this.config.providers.sarvam) return;
+    if (!this.config.providers.sarvam || this.config.demoAccessCode) return;
+    if (this.budget.snapshot().accepted >= this.config.dailyTurnCap) return;
+    void this.clips.warm();
     void this.greeting.get().catch(() => {
       getLogger().warn(
         { code: 'GREETING_UNAVAILABLE' },

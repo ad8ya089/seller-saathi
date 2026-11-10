@@ -166,6 +166,7 @@ export class Gemini implements LlmProvider {
         const calls = new FunctionCalls();
         let firstMs = 0;
         let usage = { input: 0, output: 0, thoughts: 0 };
+        let usageComplete = false;
         let finished = false;
         try {
           for (;;) {
@@ -176,6 +177,9 @@ export class Gemini implements LlmProvider {
               const metadata = usageMetadataSchema.parse(
                 response.usageMetadata,
               );
+              usageComplete =
+                metadata.promptTokenCount !== undefined &&
+                metadata.candidatesTokenCount !== undefined;
               usage = {
                 input: metadata.promptTokenCount ?? 0,
                 output: metadata.candidatesTokenCount ?? 0,
@@ -226,6 +230,8 @@ export class Gemini implements LlmProvider {
           calls: calls.finish(),
           usage,
           model,
+          attempts: attempt + 1,
+          usageComplete: usageComplete && attempt === 0,
           firstMs,
           totalMs: performance.now() - started,
         };

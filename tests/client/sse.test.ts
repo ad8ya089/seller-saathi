@@ -56,6 +56,34 @@ describe('incremental SSE parser', () => {
 });
 
 describe('POST SSE transport', () => {
+  it('retries a disconnect once with the identical ID and suppresses replayed transcript/sentences', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        new Response(transcript + sentence, {
+          headers: { 'Content-Type': 'text/event-stream' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(transcript + sentence + audio + done, {
+          headers: { 'Content-Type': 'text/event-stream' },
+        }),
+      );
+    const received: string[] = [];
+    await postEchoTurn(
+      { kind: 'text', sessionId: 'call-test', text: 'Hello' },
+      (event): void => {
+        received.push(event.event);
+      },
+      new AbortController().signal,
+      fetcher,
+    );
+    expect(received).toEqual(['transcript', 'sentence', 'audio', 'done']);
+    expect(fetcher.mock.calls[0]?.[1]?.body).toBe(
+      fetcher.mock.calls[1]?.[1]?.body,
+    );
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
   it('accepts state/activity and explicit TTS fallback without accepting arbitrary skipped audio indexes', async () => {
     const source =
       transcript +

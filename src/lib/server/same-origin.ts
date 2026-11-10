@@ -9,6 +9,8 @@ const hostSchema = z
   .regex(/^[A-Za-z0-9.:[\]-]+$/);
 
 export function assertSameOrigin(request: Request): void {
+  if (request.headers.get('Sec-Fetch-Site') === 'cross-site')
+    throw new AppError('INVALID_INPUT', 'Cross-site requests are not allowed');
   const origin = request.headers.get('Origin');
   if (origin === null) return;
   try {

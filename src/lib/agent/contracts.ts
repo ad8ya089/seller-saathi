@@ -46,7 +46,7 @@ export const sessionResponseSchema = z.strictObject({
   snapshot: z.record(z.string(), z.unknown()),
   config: z.strictObject({
     maxUtteranceMs: z.number().int().positive().max(28000),
-    bargeIn: z.literal(false),
+    bargeIn: z.boolean(),
     maxQuestions: z.number().int().min(1).max(3),
   }),
 });

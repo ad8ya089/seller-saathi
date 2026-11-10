@@ -76,4 +76,5 @@ export const textTurnSchema = z.strictObject({
   sessionId: sessionIdSchema,
   text: z.string().trim().min(1).max(VOICE_LIMITS.textChars),
   turnId: z.uuid().optional(),
+  playedSentences: z.number().int().min(0).max(16).optional(),
 });

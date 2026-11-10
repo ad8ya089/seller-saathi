@@ -1,3 +1,4 @@
+import { withAccess } from '@/lib/client/access';
 import { z } from 'zod';
 import { AppError } from '@/lib/errors';
 import { agentStateSchema, sessionResponseSchema } from '@/lib/agent/contracts';
@@ -15,7 +16,7 @@ async function jsonPost(
   const response = await abortable(
     fetch(path, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: withAccess({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(body),
       signal,
       credentials: 'same-origin',
@@ -68,7 +69,7 @@ export async function confirmVoicePlan(
 export async function endVoiceSession(sessionId: string): Promise<void> {
   const response = await fetch('/api/session', {
     method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
+    headers: withAccess({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ sessionId }),
     credentials: 'same-origin',
     mode: 'same-origin',

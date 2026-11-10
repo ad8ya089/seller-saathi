@@ -14,6 +14,8 @@ export interface HistoryTurn {
   turn: number;
   messages: LlmMessage[];
   spoken?: string;
+  sentences?: string[];
+  interrupted?: boolean;
 }
 export interface Session {
   id: string;
@@ -22,6 +24,7 @@ export interface Session {
   mode: 'call';
   phase: Phase;
   turn: number;
+  reprompts?: number;
   questionsAsked: QuestionId[];
   facts: SellerFacts;
   toolsCalled: Set<ToolName>;

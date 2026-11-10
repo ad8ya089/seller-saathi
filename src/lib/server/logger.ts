@@ -9,6 +9,10 @@ interface LogOptions {
   logTranscripts: boolean;
 }
 const secretFields = [
+  'trustedProxyToken',
+  'internalMetricsToken',
+  'TRUSTED_PROXY_TOKEN',
+  'INTERNAL_METRICS_TOKEN',
   'apiKey',
   'GEMINI_API_KEY',
   'SARVAM_API_KEY',

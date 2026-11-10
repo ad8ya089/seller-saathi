@@ -1,3 +1,4 @@
+import type { ClipBundle } from '@/lib/voice/clips';
 import type { EchoEvent, EchoTimings } from '@/lib/voice/events';
 import type { EchoSubmission } from '@/lib/client/sse';
 import type { AudioQueue } from '@/lib/client/audio-queue';
@@ -18,6 +19,7 @@ export interface TurnMeasurement {
   failed: boolean;
 }
 export interface VoiceState {
+  bargeIn: boolean;
   active: boolean;
   initializing: boolean;
   phase: VoicePhase;
@@ -34,6 +36,7 @@ export interface VoiceState {
 }
 export function initialVoiceState(): VoiceState {
   return {
+    bargeIn: true,
     active: false,
     initializing: false,
     phase: 'idle',
@@ -56,6 +59,7 @@ export interface MicrophoneCallbacks {
   onMisfire: () => void;
 }
 export interface MicrophoneHandle {
+  setPlayback?: (playing: boolean) => void;
   pause: () => Promise<void>;
   start: () => Promise<void>;
   destroy: () => Promise<void>;
@@ -83,6 +87,8 @@ export interface VoiceDependencies {
       state?: AgentState,
     ) => void;
   };
+  reportFiller?: (sessionId: string, turn: number) => void;
+  loadClips?: () => Promise<ClipBundle>;
   createAudio: () => AudioResources;
   createId: () => string;
   now: () => number;

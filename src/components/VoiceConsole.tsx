@@ -1,4 +1,5 @@
 'use client';
+import { setAccessCode } from '@/lib/client/access';
 import { useEffect, useRef, useState } from 'react';
 import type { SyntheticEvent, ReactNode } from 'react';
 import type { VoiceCall } from '@/lib/client/useVoiceCall';
@@ -86,10 +87,35 @@ export function VoiceConsole({
             {voice.active
               ? voice.textFallback
                 ? 'Type below. Your KAM will speak the reply.'
-                : 'Speak naturally, then pause. Your microphone waits while your KAM speaks.'
+                : voice.bargeIn
+                  ? 'Speak naturally. You can interrupt your KAM while it speaks.'
+                  : 'Speak naturally, then pause. Your microphone waits while your KAM speaks.'
               : 'Start with your concern. Your KAM will check the numbers with you.'}
           </p>
         </div>
+        <label className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-600">
+          <input
+            type="checkbox"
+            checked={voice.bargeIn}
+            onChange={(event): void => {
+              voice.setBargeIn(event.target.checked);
+            }}
+          />
+          Allow interruptions (turn off for half-duplex)
+        </label>
+        {voice.error?.includes('access code') && (
+          <label className="mt-3 block text-xs">
+            Demo access code
+            <input
+              type="password"
+              autoComplete="off"
+              className="mt-1 w-full rounded border p-2"
+              onChange={(event): void => {
+                setAccessCode(event.target.value);
+              }}
+            />
+          </label>
+        )}
         <div className="mt-5">
           {voice.active ? (
             <button

@@ -37,6 +37,8 @@ export interface LlmResult {
   calls: FunctionRequest[];
   usage: TokenUsage;
   model: string;
+  attempts?: number;
+  usageComplete?: boolean;
   firstMs: number;
   totalMs: number;
 }

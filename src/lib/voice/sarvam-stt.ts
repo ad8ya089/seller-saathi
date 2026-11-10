@@ -66,6 +66,10 @@ export class SarvamStt implements SttProvider {
         'No speech was recognized. Please try again or use text input',
         true,
       );
-    return { text, ms: response.ms };
+    return {
+      text,
+      ms: response.ms,
+      ...(response.attempts > 1 ? { attempts: response.attempts } : {}),
+    };
   }
 }

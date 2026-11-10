@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { AppError } from '@/lib/errors';
 import { cloneSession, replaceSession } from '@/lib/agent/session';
+import { applyPlaybackReceipt } from '@/lib/agent/interruption';
 import { runTurn } from '@/lib/agent/orchestrator';
 import type { TurnEnvironment, TurnMetrics } from '@/lib/agent/orchestrator';
 import type { SessionStore } from '@/lib/server/session-store';
@@ -28,6 +29,9 @@ export interface CompletedTurnReport {
   sessionId: string;
   turn: number;
   metrics: TurnMetrics;
+  status?: 'success' | 'failed' | 'interrupted';
+  errorCode?: string;
+  phase?: string;
 }
 export class TurnService {
   private readonly completed = new Map<string, Completed>();
@@ -37,6 +41,7 @@ export class TurnService {
     private readonly environment: AgentEnvironmentFactory,
     private readonly now: () => number = Date.now,
     private readonly onCompleted?: (report: CompletedTurnReport) => void,
+    private readonly admit?: () => void,
   ) {}
   async run(
     input: EchoInput & { turnId: string },
@@ -51,6 +56,7 @@ export class TurnService {
     const key = `${input.sessionId}:${input.turnId}`;
     const fingerprint = createHash('sha256')
       .update(input.kind)
+      .update(String(input.playedSentences ?? ''))
       .update(input.kind === 'text' ? input.text : input.wav)
       .digest('hex');
     const cached = this.completed.get(key);
@@ -66,6 +72,11 @@ export class TurnService {
     const replay =
       cached ?? (active ? await abortable(active.result, signal) : undefined);
     if (replay) {
+      if (this.now() - replay.completedAt >= 60000)
+        throw new AppError(
+          'REPLAY_EXPIRED',
+          'The previous response expired. Start a new call.',
+        );
       const result = replay;
       for (const event of result.events) {
         throwIfAborted(signal);
@@ -78,7 +89,10 @@ export class TurnService {
         input.sessionId,
         async (base): Promise<Completed> => {
           this.sessions.assertCanTurn(base);
+          this.admit?.();
           throwIfAborted(signal);
+          if (input.playedSentences !== undefined)
+            applyPlaybackReceipt(base, input.playedSentences);
           const draft = cloneSession(base);
           draft.turn += 1;
           const events: EchoEvent[] = [];
@@ -91,27 +105,90 @@ export class TurnService {
             const environment = await this.environment();
             metrics = await runTurn(draft, input, forward, {
               ...environment,
+              onMetrics: (partial): void => {
+                metrics = partial;
+              },
               signal,
               onCommitPoint: (): void => {
                 replaceSession(base, draft);
               },
             });
+            const last = draft.history.at(-1);
+            if (last)
+              last.sentences = events
+                .filter((event) => event.event === 'sentence')
+                .map((event) => event.data.text);
+            draft.reprompts = 0;
             replaceSession(base, draft);
             try {
               this.onCompleted?.({
                 sessionId: base.id,
                 turn: base.turn,
                 metrics,
+                status: 'success',
+                phase: base.phase,
               });
             } catch {
               // Observability must not turn a completed call into a failed turn.
             }
           } catch (error: unknown) {
-            base.turn = draft.turn;
+            const noSpeech =
+              error instanceof AppError && error.code === 'NO_SPEECH';
+            const exhausted = noSpeech && (base.reprompts ?? 0) >= 2;
+            if (noSpeech) base.reprompts = (base.reprompts ?? 0) + 1;
+            const failure = publicVoiceError(
+              exhausted
+                ? new AppError('TEXT_REQUIRED', 'Please use text')
+                : error,
+            );
+            if (!noSpeech) base.turn = draft.turn;
+            try {
+              this.onCompleted?.({
+                sessionId: base.id,
+                turn: base.turn,
+                phase: base.phase,
+                status: signal.aborted ? 'interrupted' : 'failed',
+                errorCode: failure.code,
+                metrics: metrics ?? {
+                  sttMs: 0,
+                  llmFirstMs: 0,
+                  llmTotalMs: 0,
+                  ttsFirstMs: 0,
+                  firstAudioMs: 0,
+                  totalMs: 0,
+                  tools: [],
+                  models: [],
+                  tokens: { input: 0, output: 0, thoughts: 0 },
+                },
+              });
+            } catch {
+              /* metrics must not affect recovery */
+            }
             base.counters = draft.counters;
+            if (signal.aborted && draft.history.length > base.history.length) {
+              const interrupted = draft.history.at(-1);
+              if (interrupted) {
+                interrupted.interrupted = true;
+                interrupted.sentences = events
+                  .filter((event) => event.event === 'sentence')
+                  .map((event) => event.data.text);
+                interrupted.spoken =
+                  '[Interrupted by seller; playback receipt pending.]';
+                base.history.push(interrupted);
+              }
+            }
             // Facts, questions, phase, proposal and signed history stay at the last
             // successful turn; a staged commitment has never reached the ledger.
-            forward({ event: 'error', data: publicVoiceError(error) });
+            if (noSpeech && !exhausted)
+              forward({
+                event: 'fallback',
+                data: {
+                  kind: 'stt',
+                  message:
+                    "Sorry, I didn't catch that. Could you say it again?",
+                },
+              });
+            forward({ event: 'error', data: failure });
           }
           const result: Completed = {
             fingerprint,
@@ -133,6 +210,13 @@ export class TurnService {
   }
   private prune(): void {
     for (const [key, result] of this.completed)
-      if (this.now() - result.completedAt >= 60000) this.completed.delete(key);
+      if (this.now() - result.completedAt >= 60000) {
+        result.events = [];
+        try {
+          this.sessions.get(key.split(':')[0] ?? '');
+        } catch {
+          this.completed.delete(key);
+        }
+      }
   }
 }

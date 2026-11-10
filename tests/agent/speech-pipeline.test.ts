@@ -5,6 +5,41 @@ import type { EchoEvent } from '@/lib/voice/events';
 import { wavFixture } from '../voice/fixtures';
 
 describe('bounded ordered agent speech', () => {
+  it('keeps sentences one and three ordered when the second synthesis fails', async () => {
+    const events: EchoEvent[] = [];
+    const tts = new FakeTts(wavFixture({ sampleRate: 24000 }), {
+      before: (index): Promise<void> =>
+        index === 1
+          ? Promise.reject(new Error('synthetic failure'))
+          : Promise.resolve(),
+    });
+    const pipeline = new SpeechPipeline(
+      tts,
+      (event): void => {
+        events.push(event);
+      },
+      new AbortController().signal,
+      0,
+    );
+    await pipeline.push('First.');
+    await pipeline.push('Second.');
+    await pipeline.push('Third.');
+    await pipeline.finish();
+    expect(
+      events
+        .filter((event) => event.event === 'sentence')
+        .map((event) => event.data.text),
+    ).toEqual(['First.', 'Second.', 'Third.']);
+    expect(
+      events
+        .filter(
+          (event) => event.event === 'audio' || event.event === 'fallback',
+        )
+        .map((event) =>
+          event.event === 'audio' ? event.data.idx : event.data.kind,
+        ),
+    ).toEqual([0, 'tts', 2]);
+  });
   it('starts at most two requests and publishes in sentence order after reverse completion', async () => {
     const releases: (() => void)[] = [];
     const tts = new FakeTts(wavFixture({ sampleRate: 24000 }), {

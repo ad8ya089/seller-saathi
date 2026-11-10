@@ -1,3 +1,4 @@
+import { withAccess } from '@/lib/client/access';
 import { AppError } from '@/lib/errors';
 import { abortable, throwIfAborted } from '@/lib/voice/abort';
 import {
@@ -10,8 +11,20 @@ import { SseParser } from '@/lib/client/sse-parser';
 export { SseParser } from '@/lib/client/sse-parser';
 
 export type EchoSubmission =
-  | { kind: 'text'; sessionId: string; text: string; turnId?: string }
-  | { kind: 'audio'; sessionId: string; wav: ArrayBuffer; turnId?: string };
+  | {
+      kind: 'text';
+      sessionId: string;
+      text: string;
+      turnId?: string;
+      playedSentences?: number;
+    }
+  | {
+      kind: 'audio';
+      sessionId: string;
+      wav: ArrayBuffer;
+      turnId?: string;
+      playedSentences?: number;
+    };
 type EventHandler = (event: EchoEvent) => void | Promise<void>;
 
 export async function httpError(response: Response): Promise<AppError> {
@@ -34,7 +47,7 @@ export async function httpError(response: Response): Promise<AppError> {
   );
 }
 
-export async function postEchoTurn(
+async function postOnce(
   input: EchoSubmission,
   onEvent: EventHandler,
   signal: AbortSignal,
@@ -42,12 +55,15 @@ export async function postEchoTurn(
 ): Promise<void> {
   throwIfAborted(signal);
   let body: BodyInit;
-  const headers = new Headers();
+  const headers = withAccess();
   if (input.kind === 'text') {
     const value = textTurnSchema.safeParse({
       sessionId: input.sessionId,
       text: input.text,
       ...(input.turnId ? { turnId: input.turnId } : {}),
+      ...(input.playedSentences !== undefined
+        ? { playedSentences: input.playedSentences }
+        : {}),
     });
     if (!value.success)
       throw new AppError('INVALID_INPUT', 'Please enter a short message');
@@ -59,6 +75,8 @@ export async function postEchoTurn(
     const form = new FormData();
     form.set('sessionId', input.sessionId);
     if (input.turnId) form.set('turnId', input.turnId);
+    if (input.playedSentences !== undefined)
+      form.set('playedSentences', String(input.playedSentences));
     form.set(
       'audio',
       new Blob([input.wav], { type: 'audio/wav' }),
@@ -173,5 +191,42 @@ export async function postEchoTurn(
   } finally {
     await reader.cancel().catch(() => undefined);
     reader.releaseLock();
+  }
+}
+
+export async function postEchoTurn(
+  input: EchoSubmission,
+  onEvent: EventHandler,
+  signal: AbortSignal,
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
+  const stable = { ...input, turnId: input.turnId ?? crypto.randomUUID() };
+  let delivered = 0;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let cursor = 0;
+    try {
+      await postOnce(
+        stable,
+        async (event): Promise<void> => {
+          cursor += 1;
+          if (cursor <= delivered) return;
+          delivered = cursor;
+          await onEvent(event);
+        },
+        signal,
+        fetcher,
+      );
+      return;
+    } catch (error: unknown) {
+      throwIfAborted(signal);
+      if (
+        attempt > 0 ||
+        !(
+          error instanceof TypeError ||
+          (error instanceof AppError && error.code === 'STREAM_INVALID')
+        )
+      )
+        throw error;
+    }
   }
 }

@@ -1,3 +1,4 @@
+import { CLIP_TEXT } from '@/lib/voice/clips';
 import 'server-only';
 import { AppError } from '@/lib/errors';
 import type { ErrorCode } from '@/lib/errors';
@@ -5,12 +6,19 @@ import { publicErrorSchema } from '@/lib/voice/events';
 import type { z } from 'zod';
 
 const MESSAGES: Readonly<Partial<Record<ErrorCode, string>>> = {
+  RATE_LIMIT: 'Too many requests. Please wait before trying again.',
+  DAILY_LIMIT: 'The demo reached its daily budget. Please return tomorrow.',
+  ACCESS_DENIED: 'Enter the demo access code to continue.',
+  REPLAY_EXPIRED:
+    'The previous response expired. Start a new call to continue.',
+
   INVALID_INPUT:
     'Send a short text message or a valid microphone WAV with a call identifier.',
   INVALID_AUDIO:
     'Please record mono PCM16 WAV audio at sixteen kilohertz, within twenty-eight seconds.',
   UPLOAD_TOO_LARGE:
     'The audio or request is too large. Please use a shorter recording.',
+  TEXT_REQUIRED: 'Speech is still unclear. Please use the text box below.',
   NO_SPEECH: 'No speech was recognized. Please try again or use text input.',
   PROVIDER_CONFIG:
     'Agent or speech is not configured. Check GEMINI_API_KEY and SARVAM_API_KEY privately in the server .env.',
@@ -44,7 +52,12 @@ export function publicVoiceError(
   return publicErrorSchema.parse({
     code: known ? error.code : 'INTERNAL',
     message: known
-      ? MESSAGES[error.code]
+      ? error.code === 'SESSION_LIMIT' &&
+        [CLIP_TEXT.time as string, CLIP_TEXT.turns as string].includes(
+          error.message,
+        )
+        ? error.message
+        : MESSAGES[error.code]
       : 'The voice request could not be completed. Please try again.',
     retryable: known ? error.retryable : true,
   });

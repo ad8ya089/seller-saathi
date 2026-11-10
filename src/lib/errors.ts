@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
 export const errorCodeSchema = z.enum([
+  'RATE_LIMIT',
+  'DAILY_LIMIT',
+  'ACCESS_DENIED',
+  'REPLAY_EXPIRED',
   'CONFIG_INVALID',
   'DATA_NOT_FOUND',
   'DATA_INVALID',
@@ -13,6 +17,7 @@ export const errorCodeSchema = z.enum([
   'UPLOAD_TOO_LARGE',
   'INVALID_INPUT',
   'NO_SPEECH',
+  'TEXT_REQUIRED',
   'PROVIDER_CONFIG',
   'PROVIDER_AUTH',
   'PROVIDER_REJECTED',

@@ -1,8 +1,10 @@
 export interface SttResult {
+  attempts?: number;
   text: string;
   ms: number;
 }
 export interface TtsResult {
+  attempts?: number;
   wav: Buffer;
   ms: number;
 }

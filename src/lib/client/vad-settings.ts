@@ -14,7 +14,12 @@ export const VAD_SETTINGS = {
   submitUserSpeechOnPause: false,
 } satisfies Partial<RealTimeVADOptions>;
 export const CALL_SETTINGS = {
+  playbackSpeechThreshold: 0.6,
   echoTailMs: 200,
-  capturePaddingMs: VAD_SETTINGS.preSpeechPadMs + 64,
-  maxCaptureMs: VOICE_LIMITS.utteranceMs - VAD_SETTINGS.preSpeechPadMs - 64,
+  capturePaddingMs: VAD_SETTINGS.preSpeechPadMs + VAD_SETTINGS.minSpeechMs + 64,
+  maxCaptureMs:
+    VOICE_LIMITS.utteranceMs -
+    VAD_SETTINGS.preSpeechPadMs -
+    VAD_SETTINGS.minSpeechMs -
+    64,
 } as const;

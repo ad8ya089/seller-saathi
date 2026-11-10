@@ -149,6 +149,37 @@ const planScript: FakeResponse[] = [
 ];
 
 describe('guarded SellerSaathi streaming turns', () => {
+  it('self-corrects malformed tool arguments within the existing loop limit', async () => {
+    const app = await rig([
+      call('get_seller_snapshot', { unexpected: true }),
+      ...findings,
+    ]);
+    const events = await app.turn('My sales dropped');
+    expect(events.at(-1)?.event).toBe('done');
+    expect(app.llm.requests).toHaveLength(4);
+    const rejected = app.llm.requests[1]?.history.find(
+      (message) => message.kind === 'tools',
+    );
+    expect(rejected?.results[0]?.response.ok).toBe(false);
+  });
+  it('keeps phase, facts and ledger unchanged after an exhausted provider policy', async () => {
+    const app = await rig([
+      {
+        error: new AppError(
+          'PROVIDER_TIMEOUT',
+          'Synthetic bounded provider failure',
+        ),
+      },
+    ]);
+    const events = await app.turn('My sales dropped');
+    expect(events.at(-1)).toMatchObject({
+      event: 'error',
+      data: { code: 'PROVIDER_TIMEOUT' },
+    });
+    expect(app.store.get(app.id).phase).toBe('greeting');
+    expect(app.store.get(app.id).facts).toEqual({});
+    expect(await listLatest(20, app.directory)).toEqual([]);
+  });
   it('does not mistake a request to check stock for seller restock capacity', async () => {
     const app = await rig(findings);
     const events = await app.turn(
@@ -159,7 +190,7 @@ describe('guarded SellerSaathi streaming turns', () => {
     expect(app.store.get(app.id).questionsAsked).toEqual(['Q_OOS_CONFIRM']);
     expect(app.llm.requests).toHaveLength(3);
   });
-  it('replays for sixty seconds and releases the completed-turn cache afterwards', async () => {
+  it('replays for sixty seconds then rejects an expired replay without billing again', async () => {
     let now = 0;
     const app = await rig(
       [{ text: ['Hello.'] }, { text: ['Hello again.'] }],
@@ -172,9 +203,10 @@ describe('guarded SellerSaathi streaming turns', () => {
     expect(await app.turn('Hello.', turnId)).toEqual(first);
     expect(app.llm.requests).toHaveLength(1);
     now = 60000;
-    const next = await app.turn('Hello.', turnId);
-    expect(next.at(-1)).toMatchObject({ event: 'done', data: { turn: 2 } });
-    expect(app.llm.requests).toHaveLength(2);
+    await expect(app.turn('Hello.', turnId)).rejects.toMatchObject({
+      code: 'REPLAY_EXPIRED',
+    });
+    expect(app.llm.requests).toHaveLength(1);
   });
   it('starts audio before the model finishes and deduplicates concurrent retries', async () => {
     let release: () => void = () => undefined;

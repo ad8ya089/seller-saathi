@@ -14,6 +14,8 @@ export class SpeechPipeline {
   firstTtsMs = 0;
   firstAudioMs = 0;
   ttsChars = 0;
+  fallbacks = 0;
+  retries = 0;
   constructor(
     private readonly tts: TtsProvider | undefined,
     private readonly emit: EmitEchoEvent,
@@ -29,6 +31,7 @@ export class SpeechPipeline {
         this.tts.synthesize(text, 'en-IN', this.signal),
         this.signal,
       );
+      this.retries += Math.max(0, (result.attempts ?? 1) - 1);
       validateWav(result.wav, {
         sampleRates: [VOICE_LIMITS.outputSampleRate],
         maxBytes: VOICE_LIMITS.ttsAudioBytes,
@@ -72,7 +75,8 @@ export class SpeechPipeline {
             b64: outcome.result.wav.toString('base64'),
           },
         });
-      } else
+      } else {
+        this.fallbacks += 1;
         this.emit({
           event: 'fallback',
           data: {
@@ -81,6 +85,7 @@ export class SpeechPipeline {
               'Voice synthesis failed for this sentence. Your browser will read its text.',
           },
         });
+      }
     });
     this.tail = ordered.catch((error: unknown) => {
       this.failure =

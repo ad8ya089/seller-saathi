@@ -8,8 +8,20 @@ import { validateWav } from '@/lib/voice/wav';
 import { assertSameOrigin } from '@/lib/server/same-origin';
 
 export type EchoInput =
-  | { kind: 'text'; sessionId: string; text: string; turnId?: string }
-  | { kind: 'audio'; sessionId: string; wav: Buffer; turnId?: string };
+  | {
+      kind: 'text';
+      sessionId: string;
+      text: string;
+      turnId?: string;
+      playedSentences?: number;
+    }
+  | {
+      kind: 'audio';
+      sessionId: string;
+      wav: Buffer;
+      turnId?: string;
+      playedSentences?: number;
+    };
 export interface UploadLimits {
   maxBytes: number;
   maxDurationMs: number;
@@ -18,6 +30,7 @@ const audioFormSchema = z.strictObject({
   sessionId: sessionIdSchema,
   audio: z.instanceof(Blob),
   turnId: z.uuid().optional(),
+  playedSentences: z.coerce.number().int().min(0).max(16).optional(),
 });
 
 async function limitedBody(
@@ -78,6 +91,9 @@ export async function parseEchoInput(
       sessionId: parsed.data.sessionId,
       text: parsed.data.text,
       ...(parsed.data.turnId ? { turnId: parsed.data.turnId } : {}),
+      ...(parsed.data.playedSentences !== undefined
+        ? { playedSentences: parsed.data.playedSentences }
+        : {}),
     };
   }
   if (!contentType.toLowerCase().startsWith('multipart/form-data;'))
@@ -97,10 +113,12 @@ export async function parseEchoInput(
     throw new AppError('INVALID_INPUT', 'Multipart input is invalid');
   }
   if (
-    [...form.keys()].length !== (form.has('turnId') ? 3 : 2) ||
+    [...form.keys()].length !==
+      2 + Number(form.has('turnId')) + Number(form.has('playedSentences')) ||
     form.getAll('sessionId').length !== 1 ||
     form.getAll('audio').length !== 1 ||
-    (form.has('turnId') && form.getAll('turnId').length !== 1)
+    (form.has('turnId') && form.getAll('turnId').length !== 1) ||
+    (form.has('playedSentences') && form.getAll('playedSentences').length !== 1)
   )
     throw new AppError(
       'INVALID_INPUT',
@@ -110,6 +128,9 @@ export async function parseEchoInput(
     sessionId: form.get('sessionId'),
     audio: form.get('audio'),
     ...(form.has('turnId') ? { turnId: form.get('turnId') } : {}),
+    ...(form.has('playedSentences')
+      ? { playedSentences: form.get('playedSentences') }
+      : {}),
   });
   if (!parsed.success)
     throw new AppError('INVALID_INPUT', 'Audio request fields are invalid');
@@ -125,6 +146,9 @@ export async function parseEchoInput(
     sessionId: parsed.data.sessionId,
     wav,
     ...(parsed.data.turnId ? { turnId: parsed.data.turnId } : {}),
+    ...(parsed.data.playedSentences !== undefined
+      ? { playedSentences: parsed.data.playedSentences }
+      : {}),
   };
 }
 

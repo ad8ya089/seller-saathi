@@ -1,7 +1,7 @@
 import type { MicVAD } from '@ricky0123/vad-web';
 import { AppError } from '@/lib/errors';
 import { abortable, throwIfAborted } from '@/lib/voice/abort';
-import { VAD_SETTINGS } from '@/lib/client/vad-settings';
+import { CALL_SETTINGS, VAD_SETTINGS } from '@/lib/client/vad-settings';
 import type {
   MicrophoneCallbacks,
   MicrophoneHandle,
@@ -74,7 +74,8 @@ export async function openBrowserMicrophone(
       getStream: (): Promise<MediaStream> => Promise.resolve(capturedStream),
       pauseStream: (): Promise<void> => Promise.resolve(),
       resumeStream: (): Promise<MediaStream> => Promise.resolve(capturedStream),
-      onSpeechStart: callbacks.onSpeechStart,
+      // Confirm minSpeechMs before interrupting; short echo/noise bursts remain misfires.
+      onSpeechRealStart: callbacks.onSpeechStart,
       onSpeechEnd: callbacks.onSpeechEnd,
       onVADMisfire: callbacks.onMisfire,
       onFrameProcessed: (probabilities): void => {
@@ -104,6 +105,13 @@ export async function openBrowserMicrophone(
     }
     const activeVad = vad;
     return {
+      setPlayback: (playing): void => {
+        activeVad.setOptions({
+          positiveSpeechThreshold: playing
+            ? CALL_SETTINGS.playbackSpeechThreshold
+            : VAD_SETTINGS.positiveSpeechThreshold,
+        });
+      },
       pause: (): Promise<void> => activeVad.pause(),
       start: (): Promise<void> => {
         throwIfAborted(signal);

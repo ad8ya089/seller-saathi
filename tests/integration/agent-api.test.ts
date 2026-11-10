@@ -108,7 +108,7 @@ describe('agent HTTP boundaries', () => {
     );
     const body = sessionResponseSchema.parse(await first.json());
     expect(body.greeting.text).toContain('an AI assistant');
-    expect(body.config.bargeIn).toBe(false);
+    expect(body.config.bargeIn).toBe(true);
     expect(body.snapshot.seller).toMatchObject({ name: fixture.seller.name });
     expect((await handler(request('session', { lang: 'en-IN' }))).status).toBe(
       200,

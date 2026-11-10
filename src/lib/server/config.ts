@@ -1,5 +1,7 @@
 import 'server-only';
 import { z } from 'zod';
+import { pricingSchema } from '@/lib/server/cost';
+import type { Pricing } from '@/lib/server/cost';
 import { AppError } from '@/lib/errors';
 import {
   compatibleSpeaker,
@@ -45,6 +47,7 @@ const environmentSchema = z.object({
   HOSTNAME: z.string().trim().min(1).default('0.0.0.0'),
   GEMINI_API_KEY: optionalText,
   SARVAM_API_KEY: optionalText,
+  SELLER_SIM_MODEL: z.string().min(1).default('gemini-3.5-flash-lite'),
   GEMINI_MODEL: z.string().min(1).default('gemini-3.5-flash-lite'),
   GEMINI_FALLBACK_MODEL: z.string().min(1).default('gemini-3.6-flash'),
   GEMINI_THINKING_LEVEL: z
@@ -77,6 +80,14 @@ const environmentSchema = z.object({
   RATE_LIMIT_TURNS: integer(40),
   RATE_LIMIT_WINDOW_MS: integer(600_000),
   DAILY_TURN_CAP: integer(800),
+  PROVIDER_PRICING_JSON: z.preprocess((value) => {
+    if (value === undefined || value === '') return undefined;
+    try {
+      return typeof value === 'string' ? (JSON.parse(value) as unknown) : value;
+    } catch {
+      return null;
+    }
+  }, pricingSchema.optional()),
   MAX_UTTERANCE_BYTES: integer(1_048_576),
   MAX_UTTERANCE_MS: integer(28000, 1, 30000),
   MAX_QUESTIONS: integer(3, 2, 3),
@@ -84,6 +95,8 @@ const environmentSchema = z.object({
   DATA_DIR: z.string().trim().min(1).default('.data'),
   MOCK_DATA_DIR: z.string().trim().min(1).default('data'),
   DEMO_ACCESS_CODE: optionalText,
+  TRUSTED_PROXY_TOKEN: optionalText,
+  INTERNAL_METRICS_TOKEN: optionalText,
   DOMAIN: z.preprocess(
     (value) => (value === '' ? undefined : value),
     z
@@ -103,6 +116,7 @@ const environmentSchema = z.object({
 
 type Environment = z.infer<typeof environmentSchema>;
 export interface AppConfig {
+  sellerSimModel: string;
   environment: Environment['NODE_ENV'];
   port: number;
   hostname: string;
@@ -142,12 +156,15 @@ export interface AppConfig {
   rateLimitTurns: number;
   rateLimitWindowMs: number;
   dailyTurnCap: number;
+  pricing: Pricing | undefined;
   maxUtteranceBytes: number;
   maxUtteranceMs: number;
   maxToolRounds: number;
   dataDir: string;
   mockDataDir: string;
   demoAccessCode: string | undefined;
+  trustedProxyToken: string | undefined;
+  internalMetricsToken: string | undefined;
   domain: string | undefined;
   thresholds: SignalThresholds;
   investigation: InvestigationPolicy;
@@ -172,6 +189,7 @@ export function parseConfig(
       'Invalid configuration: SARVAM_TTS_SPEAKER must match SARVAM_TTS_MODEL',
     );
   return {
+    sellerSimModel: env.SELLER_SIM_MODEL,
     environment: env.NODE_ENV,
     port: env.PORT,
     hostname: env.HOSTNAME,
@@ -214,12 +232,15 @@ export function parseConfig(
     rateLimitTurns: env.RATE_LIMIT_TURNS,
     rateLimitWindowMs: env.RATE_LIMIT_WINDOW_MS,
     dailyTurnCap: env.DAILY_TURN_CAP,
+    pricing: env.PROVIDER_PRICING_JSON,
     maxUtteranceBytes: env.MAX_UTTERANCE_BYTES,
     maxUtteranceMs: env.MAX_UTTERANCE_MS,
     maxToolRounds: env.MAX_TOOL_ROUNDS,
     dataDir: env.DATA_DIR,
     mockDataDir: env.MOCK_DATA_DIR,
     demoAccessCode: env.DEMO_ACCESS_CODE,
+    trustedProxyToken: env.TRUSTED_PROXY_TOKEN,
+    internalMetricsToken: env.INTERNAL_METRICS_TOKEN,
     domain: env.DOMAIN,
     thresholds: thresholdSchema.parse({
       orderDropPct: env.ORDER_DROP_PCT,

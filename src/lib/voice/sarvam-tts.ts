@@ -85,6 +85,10 @@ export class SarvamTts implements TtsProvider {
         'Sarvam returned unusable WAV audio',
       );
     }
-    return { wav, ms: response.ms };
+    return {
+      wav,
+      ms: response.ms,
+      ...(response.attempts > 1 ? { attempts: response.attempts } : {}),
+    };
   }
 }

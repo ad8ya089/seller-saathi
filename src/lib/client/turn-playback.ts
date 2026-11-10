@@ -16,6 +16,8 @@ interface PlaybackOptions {
 }
 export class TurnPlayback {
   firstAudioMs: number | null = null;
+  playedSentences = 0;
+  private readonly delivered = new Set<number>();
   private canMeasure = true;
   private readonly sentences = new Map<number, string>();
   private readonly pending = new Map<number, string>();
@@ -41,29 +43,40 @@ export class TurnPlayback {
       this.pending.set(event.data.idx, event.data.text);
       this.message('assistant', [...this.sentences.values()].join(' '));
     } else if (event.event === 'audio') {
+      if (this.delivered.has(event.data.idx)) return;
+      this.delivered.add(event.data.idx);
       this.pending.delete(event.data.idx);
       options.patch({ phase: 'speaking' });
-      await options.queue.enqueue(event.data.b64, (): void => {
-        if (
-          this.firstAudioMs !== null ||
-          !this.canMeasure ||
-          !options.current()
-        )
-          return;
-        this.firstAudioMs = Math.max(0, options.now() - options.endedAt);
-        options.patch({ firstAudioMs: this.firstAudioMs });
-      });
+      await options.queue.enqueue(
+        event.data.b64,
+        (): void => {
+          if (
+            this.firstAudioMs !== null ||
+            !this.canMeasure ||
+            !options.current()
+          )
+            return;
+          this.firstAudioMs = Math.max(0, options.now() - options.endedAt);
+          options.patch({ firstAudioMs: this.firstAudioMs });
+        },
+        (): void => {
+          if (options.current()) this.playedSentences += 1;
+        },
+      );
     } else if (event.event === 'fallback') {
       options.patch({ notice: event.data.message });
       if (event.data.kind === 'tts') {
         const next = this.pending.entries().next().value;
         if (!next) return;
         this.pending.delete(next[0]);
+        if (this.delivered.has(next[0])) return;
+        this.delivered.add(next[0]);
         if (this.firstAudioMs === null) this.canMeasure = false;
         await options.queue.whenIdle();
         if (!options.current()) return;
         options.patch({ phase: 'speaking' });
         await options.speakFallback(next[1], options.signal);
+        if (options.current()) this.playedSentences += 1;
       }
     } else if (event.event === 'done')
       options.patch({ serverTimings: event.data.timings });

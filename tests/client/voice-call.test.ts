@@ -8,8 +8,10 @@ import type {
   MicrophoneHandle,
   VoiceDependencies,
 } from '@/lib/client/voice-state';
+import type { SessionResponse } from '@/lib/agent/contracts';
 import type { EchoEvent } from '@/lib/voice/events';
 import { AppError } from '@/lib/errors';
+import { abortable } from '@/lib/voice/abort';
 import { CALL_SETTINGS } from '@/lib/client/vad-settings';
 import { wavFixture } from '../voice/fixtures';
 
@@ -115,6 +117,69 @@ const echoEvents: EchoEvent[] = [
     data: { timings: { sttMs: 3, ttsFirstMs: 2, totalMs: 6 }, turn: 1 },
   },
 ];
+
+describe('full-duplex interruption', () => {
+  it.each([0, 1])(
+    'reports only %i actually completed sentences and suppresses stale audio',
+    async (completed) => {
+      const app = rig();
+      const original = await app.deps.openSession(new AbortController().signal);
+      app.deps.openSession = (): Promise<SessionResponse> =>
+        Promise.resolve({
+          ...original,
+          config: { ...original.config, bargeIn: true },
+        });
+      let stale: ((event: EchoEvent) => Promise<void>) | undefined;
+      let signal: AbortSignal | undefined;
+      const send = vi
+        .fn<VoiceDependencies['send']>()
+        .mockImplementationOnce(async (_input, onEvent, active) => {
+          stale = onEvent;
+          signal = active;
+          await onEvent(echoEvents[0] as EchoEvent);
+          await onEvent(echoEvents[1] as EchoEvent);
+          await onEvent(echoEvents[2] as EchoEvent);
+          await abortable(new Promise<void>(() => undefined), active);
+        })
+        .mockResolvedValue(undefined);
+      app.deps.send = send;
+      await app.controller.startCall();
+      const response = app.controller.sendText('Hello stock');
+      await vi.waitFor(() => {
+        expect(app.ended).toHaveLength(1);
+      });
+      if (completed) app.ended[0]?.();
+      const started = performance.now();
+      app.callbacks().onSpeechStart();
+      expect(performance.now() - started).toBeLessThan(300);
+      expect(signal?.aborted).toBe(true);
+      expect(app.controller.snapshot().phase).toBe('listening');
+      await response;
+      await stale?.({
+        event: 'audio',
+        data: { idx: 1, mime: 'audio/wav', b64: wav },
+      });
+      expect(app.ended).toHaveLength(1);
+      app.callbacks().onSpeechEnd(new Float32Array(1600));
+      app.callbacks().onSpeechEnd(new Float32Array(1600));
+      await vi.waitFor(() => {
+        expect(send).toHaveBeenCalledTimes(2);
+      });
+      expect(send.mock.calls[1]?.[0].playedSentences).toBe(completed);
+      await app.controller.dispose();
+    },
+  );
+  it('retains half-duplex as a selectable fallback', async () => {
+    const app = rig();
+    app.controller.setBargeIn(false);
+    await app.controller.startCall();
+    app.controller.setBargeIn(false);
+    await app.controller.sendText('Hello');
+    expect(app.capture.pause).toHaveBeenCalled();
+    expect(app.controller.snapshot().bargeIn).toBe(false);
+    await app.controller.dispose();
+  });
+});
 
 describe('voice call lifecycle', () => {
   it('waits for the server greeting to finish before opening the microphone', async () => {

@@ -1,3 +1,4 @@
+import { CLIP_TEXT } from '@/lib/voice/clips';
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '@/lib/errors';
@@ -10,6 +11,7 @@ interface Limits {
 }
 export class SessionStore {
   private readonly sessions = new Map<string, Session>();
+  private readonly activity = new Map<string, number>();
   private readonly busy = new Set<string>();
   private readonly cancellations = new Map<string, AbortController>();
   constructor(
@@ -44,13 +46,17 @@ export class SessionStore {
       },
     };
     this.sessions.set(session.id, session);
+    this.activity.set(session.id, this.now());
     this.cancellations.set(session.id, new AbortController());
     return session;
   }
   get(id: string): Session {
     const session = this.sessions.get(id);
     if (!session) throw new AppError('SESSION_NOT_FOUND', 'Start a new call.');
-    if (this.now() - session.createdAt >= this.limits.ttlMs) {
+    if (
+      this.now() - (this.activity.get(session.id) ?? session.createdAt) >=
+      this.limits.ttlMs
+    ) {
       this.remove(id);
       throw new AppError(
         'SESSION_EXPIRED',
@@ -60,14 +66,10 @@ export class SessionStore {
     return session;
   }
   assertCanTurn(session: Session): void {
-    if (
-      this.now() - session.createdAt >= this.limits.maxMs ||
-      session.turn >= this.limits.maxTurns
-    )
-      throw new AppError(
-        'SESSION_LIMIT',
-        'This call reached its limit. Start a new call.',
-      );
+    if (this.now() - session.createdAt >= this.limits.maxMs)
+      throw new AppError('SESSION_LIMIT', CLIP_TEXT.time);
+    if (session.turn >= this.limits.maxTurns)
+      throw new AppError('SESSION_LIMIT', CLIP_TEXT.turns);
     if (session.phase === 'done')
       throw new AppError(
         'SESSION_LIMIT',
@@ -86,16 +88,19 @@ export class SessionStore {
         true,
       );
     this.busy.add(id);
+    this.activity.set(id, this.now());
     try {
       return await run(session);
     } finally {
       this.busy.delete(id);
+      this.activity.set(id, this.now());
     }
   }
   remove(id: string): void {
     this.cancellations.get(id)?.abort();
     this.cancellations.delete(id);
     this.sessions.delete(id);
+    this.activity.delete(id);
   }
   signal(id: string): AbortSignal {
     this.get(id);
@@ -118,7 +123,8 @@ export class SessionStore {
     for (const [id, session] of this.sessions)
       if (
         !this.busy.has(id) &&
-        this.now() - session.createdAt >= this.limits.ttlMs
+        this.now() - (this.activity.get(session.id) ?? session.createdAt) >=
+          this.limits.ttlMs
       )
         this.remove(id);
   }

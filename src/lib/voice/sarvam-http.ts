@@ -9,6 +9,7 @@ export interface SarvamHttpSettings {
   retries: number;
 }
 interface JsonResult {
+  attempts: number;
   body: unknown;
   ms: number;
 }
@@ -143,6 +144,7 @@ export async function postSarvamJson(
         );
         if (response.ok)
           return {
+            attempts: attempt + 1,
             body: await readJson(response, signal),
             ms: performance.now() - started,
           };

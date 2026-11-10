@@ -1,4 +1,5 @@
 import 'server-only';
+import { AppError } from '@/lib/errors';
 import { abortable } from '@/lib/voice/abort';
 import type { TtsProvider } from '@/lib/voice/providers';
 import { validateWav } from '@/lib/voice/wav';
@@ -7,12 +8,20 @@ import { VOICE_LIMITS } from '@/lib/voice/limits';
 export const GREETING =
   "Hello, I'm Snapdeal's Virtual Account Manager, an AI assistant. How can I help you today?";
 export class GreetingCache {
+  private failedAt = -Infinity;
   private pending:
     Promise<{ text: string; audioB64: string; mime: 'audio/wav' }> | undefined;
   constructor(private readonly tts: TtsProvider) {}
   get(
     signal?: AbortSignal,
   ): Promise<{ text: string; audioB64: string; mime: 'audio/wav' }> {
+    if (performance.now() - this.failedAt < 30000)
+      return Promise.reject(
+        new AppError(
+          'PROVIDER_UNAVAILABLE',
+          'Greeting temporarily unavailable',
+        ),
+      );
     this.pending ??= this.tts
       .synthesize(GREETING, 'en-IN')
       .then((result) => {
@@ -29,6 +38,7 @@ export class GreetingCache {
       })
       .catch((error: unknown) => {
         this.pending = undefined;
+        this.failedAt = performance.now();
         throw error;
       });
     return signal ? abortable(this.pending, signal) : this.pending;

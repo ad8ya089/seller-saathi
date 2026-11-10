@@ -1,6 +1,9 @@
 'use client';
 
 import { useEffect, useReducer, useRef } from 'react';
+import type { ClipBundle } from '@/lib/voice/clips';
+import { clipBundleSchema } from '@/lib/voice/clips';
+import { withAccess } from '@/lib/client/access';
 import { createBrowserAudio } from '@/lib/client/browser-audio';
 import { VoiceCallController } from '@/lib/client/voice-call';
 import { appReducer, initialAppState } from '@/lib/client/app-state';
@@ -17,6 +20,7 @@ import {
 } from '@/lib/client/session-api';
 
 export interface VoiceCall extends AppState {
+  setBargeIn: (enabled: boolean) => void;
   startCall: () => Promise<void>;
   endCall: () => void;
   sendText: (text: string) => Promise<boolean>;
@@ -59,6 +63,22 @@ export function useVoiceCall(): VoiceCall {
     reference.current ??= new VoiceCallController(
       {
         createAudio: createBrowserAudio,
+        reportFiller: (sessionId, turn): void => {
+          void fetch('/api/metrics', {
+            method: 'POST',
+            headers: withAccess({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ sessionId, turn }),
+          }).catch(() => undefined);
+        },
+        loadClips: async (): Promise<ClipBundle> =>
+          clipBundleSchema.parse(
+            await (
+              await fetch('/api/clips', {
+                headers: withAccess(),
+                cache: 'no-store',
+              })
+            ).json(),
+          ),
         createId: (): string => crypto.randomUUID(),
         now: (): number => performance.now(),
         send: postEchoTurn,
@@ -115,6 +135,9 @@ export function useVoiceCall(): VoiceCall {
   );
   return {
     ...state,
+    setBargeIn: (enabled): void => {
+      controller().setBargeIn(enabled);
+    },
     startCall: (): Promise<void> => controller().startCall(),
     endCall: (): void => {
       reference.current?.endCall();

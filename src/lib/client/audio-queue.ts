@@ -29,7 +29,11 @@ export class AudioQueue {
   private readonly startTimers = new Set<ReturnType<typeof setTimeout>>();
   constructor(private readonly port: PlaybackPort) {}
 
-  enqueue(base64: string, onStarted?: () => void): Promise<void> {
+  enqueue(
+    base64: string,
+    onStarted?: () => void,
+    onCompleted?: () => void,
+  ): Promise<void> {
     const generation = this.generation;
     this.pending += 1;
     const task = this.tail.then(async (): Promise<void> => {
@@ -65,6 +69,7 @@ export class AudioQueue {
           holder.ended = true;
           if (generation !== this.generation) return;
           if (holder.source) this.sources.delete(holder.source);
+          onCompleted?.();
           this.resolveIdle();
         };
         const source = clip.play(when, finish);

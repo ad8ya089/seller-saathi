@@ -1,3 +1,6 @@
+import { CLIP_TEXT } from '@/lib/voice/clips';
+import type { ClipBundle, ClipName } from '@/lib/voice/clips';
+import { Filler } from '@/lib/client/filler';
 import { AppError } from '@/lib/errors';
 import { textTurnSchema } from '@/lib/voice/events';
 import { encodeMicrophoneWav } from '@/lib/client/wav-encode';
@@ -20,6 +23,11 @@ interface Call {
   queue: AudioQueue;
   capture?: MicrophoneHandle;
   busy: boolean;
+  duplex: boolean;
+  auxiliarySpeaking: boolean;
+  activeTurn?: { abort: AbortController; playback: TurnPlayback };
+  playedSentences?: number;
+  speechOpen: boolean;
   turn: number;
   lastSpeechAt: number | null;
   ready: boolean;
@@ -28,6 +36,7 @@ interface Call {
   captureTimer?: ReturnType<typeof setTimeout>;
 }
 export class VoiceCallController {
+  private clips: ClipBundle | undefined;
   private state = initialVoiceState();
   private call: Call | undefined;
   private audio: AudioResources | undefined;
@@ -43,6 +52,9 @@ export class VoiceCallController {
 
   private patch(update: Partial<VoiceState>): void {
     this.state = { ...this.state, ...update };
+    this.call?.capture?.setPlayback?.(
+      this.state.phase === 'speaking' || this.call.auxiliarySpeaking,
+    );
     if (!this.disposed) this.onChange(this.state);
   }
   private current(call: Call): boolean {
@@ -69,11 +81,20 @@ export class VoiceCallController {
   }
   private newCall(textFallback: boolean): Call {
     this.audio ??= this.dependencies.createAudio();
+    void this.dependencies
+      .loadClips?.()
+      .then((bundle) => {
+        this.clips = bundle;
+      })
+      .catch(() => undefined);
     const call: Call = {
       id: this.dependencies.createId(),
       abort: new AbortController(),
       queue: this.audio.createQueue(),
       busy: false,
+      duplex: false,
+      auxiliarySpeaking: false,
+      speechOpen: false,
       turn: 0,
       lastSpeechAt: null,
       ready: false,
@@ -82,6 +103,7 @@ export class VoiceCallController {
     this.call = call;
     this.patch({
       ...initialVoiceState(),
+      bargeIn: this.state.bargeIn,
       active: true,
       phase: 'listening',
       textFallback,
@@ -103,6 +125,7 @@ export class VoiceCallController {
         }
         call.id = session.sessionId;
         call.ready = true;
+        call.duplex = session.config.bargeIn;
         this.dependencies.observe?.session(session);
         call.captureMs = Math.max(
           1,
@@ -124,6 +147,12 @@ export class VoiceCallController {
         });
         await call.queue.enqueue(session.greeting.audioB64);
         await call.queue.whenIdle();
+        try {
+          const clips = await this.dependencies.loadClips?.();
+          if (clips && this.current(call)) this.clips = clips;
+        } catch {
+          /* Browser speech remains the controlled cache fallback. */
+        }
         if (this.current(call))
           this.patch({ phase: 'listening', initializing: false });
       };
@@ -170,21 +199,31 @@ export class VoiceCallController {
     const capture = await this.audio.openMicrophone(
       {
         onVoiceFrame: (): void => {
-          if (this.current(call) && !call.busy)
+          if (
+            this.current(call) &&
+            (!call.busy || (call.duplex && this.state.bargeIn))
+          )
             call.lastSpeechAt = this.dependencies.now();
         },
         onSpeechStart: (): void => {
-          if (!this.current(call) || call.busy) return;
+          if (!this.current(call)) return;
+          if (call.busy && call.duplex && this.state.bargeIn)
+            this.interrupt(call);
+          if (call.busy || call.speechOpen) return;
+          call.speechOpen = true;
           this.clearCaptureTimer(call);
           call.captureTimer = setTimeout(() => {
             void this.captureLimit(call);
           }, call.captureMs);
         },
         onMisfire: (): void => {
+          call.speechOpen = false;
           this.clearCaptureTimer(call);
         },
         onSpeechEnd: (samples): void => {
           this.clearCaptureTimer(call);
+          if (!call.speechOpen) return;
+          call.speechOpen = false;
           if (this.current(call))
             void this.submitAudio(
               samples,
@@ -300,36 +339,112 @@ export class VoiceCallController {
     });
     const audio = this.audio;
     if (!audio) return;
+    const turnAbort = new AbortController();
+    const signal = AbortSignal.any([call.abort.signal, turnAbort.signal]);
+    const currentTurn = (): boolean =>
+      this.current(call) &&
+      call.activeTurn?.abort === turnAbort &&
+      !signal.aborted;
+    const filler = new Filler(
+      audio.createQueue(),
+      async (queue, signal): Promise<void> => {
+        if (!this.clips || !currentTurn()) return;
+        call.auxiliarySpeaking = true;
+        call.capture?.setPlayback?.(true);
+        const b64 = this.clips.clips.filler;
+        if (b64) {
+          await queue.enqueue(b64);
+          await queue.whenIdle();
+        } else await audio.speakFallback(CLIP_TEXT.filler, signal);
+      },
+      1500 - Math.max(0, this.dependencies.now() - endedAt),
+      (): void => {
+        if (this.clips && currentTurn())
+          this.dependencies.reportFiller?.(call.id, turn);
+      },
+    );
+    signal.addEventListener(
+      'abort',
+      () => {
+        filler.stop();
+        call.auxiliarySpeaking = false;
+      },
+      { once: true },
+    );
     const playback = new TurnPlayback({
-      current: (): boolean => this.current(call),
+      current: currentTurn,
       snapshot: (): VoiceState => this.state,
       patch: (update): void => {
         this.patch(update);
       },
       queue: call.queue,
       speakFallback: audio.speakFallback,
-      signal: call.abort.signal,
+      signal,
       now: this.dependencies.now,
       endedAt,
       prefix,
     });
+    call.activeTurn = { abort: turnAbort, playback };
     let failed = false;
     try {
-      await call.capture?.pause();
+      if (!call.duplex || !this.state.bargeIn) await call.capture?.pause();
       if (!this.current(call)) return;
       await this.dependencies.send(
-        { ...input, turnId: this.dependencies.createId() },
+        {
+          ...input,
+          turnId: this.dependencies.createId(),
+          ...(call.playedSentences !== undefined
+            ? { playedSentences: call.playedSentences }
+            : {}),
+        },
         (event): Promise<void> => {
-          if (this.current(call))
-            this.dependencies.observe?.event(prefix, event);
+          if (!currentTurn()) return Promise.resolve();
+          if (
+            event.event === 'audio' ||
+            event.event === 'fallback' ||
+            event.event === 'error'
+          ) {
+            filler.stop();
+            call.auxiliarySpeaking = false;
+          }
+          if (currentTurn()) this.dependencies.observe?.event(prefix, event);
           return playback.onEvent(event);
         },
-        call.abort.signal,
+        signal,
       );
       await call.queue.whenIdle();
     } catch (error: unknown) {
+      if (!currentTurn()) return;
       failed = true;
+      filler.stop();
       call.queue.stopAll();
+      const code = error instanceof AppError ? error.code : 'INTERNAL';
+      const clip: ClipName =
+        code === 'NO_SPEECH'
+          ? 'reprompt'
+          : code === 'DAILY_LIMIT'
+            ? 'daily'
+            : code === 'SESSION_LIMIT'
+              ? error instanceof AppError &&
+                error.message.includes('time limit')
+                ? 'time'
+                : 'turns'
+              : 'apology';
+      if (code === 'TEXT_REQUIRED') {
+        this.patch({ textFallback: true });
+        await call.capture?.pause();
+      }
+      if (code !== 'TEXT_REQUIRED' && this.clips && currentTurn()) {
+        try {
+          const b64 = this.clips.clips[clip];
+          if (b64) {
+            await call.queue.enqueue(b64);
+            await call.queue.whenIdle();
+          } else await audio.speakFallback(CLIP_TEXT[clip], signal);
+        } catch {
+          /* The visible text error remains available. */
+        }
+      }
       if (this.current(call) && error instanceof AppError)
         this.dependencies.observe?.error(error.code);
       if (this.current(call))
@@ -339,8 +454,20 @@ export class VoiceCallController {
               ? error.message
               : 'The voice connection failed. Please try again.',
         });
+      if (
+        [
+          'SESSION_NOT_FOUND',
+          'SESSION_EXPIRED',
+          'SESSION_LIMIT',
+          'DAILY_LIMIT',
+        ].includes(code)
+      )
+        this.endCall();
     } finally {
-      if (this.current(call)) {
+      filler.stop();
+      call.auxiliarySpeaking = false;
+      if (currentTurn()) {
+        delete call.playedSentences;
         this.patch({
           measurements: [
             ...this.state.measurements,
@@ -358,8 +485,10 @@ export class VoiceCallController {
         }
         if (this.current(call))
           try {
-            await this.dependencies.cooldown(call.abort.signal);
-            if (this.current(call)) await call.capture?.start();
+            if (!call.duplex || !this.state.bargeIn) {
+              await this.dependencies.cooldown(call.abort.signal);
+              if (this.current(call)) await call.capture?.start();
+            }
           } catch {
             if (this.current(call))
               this.patch({
@@ -368,12 +497,41 @@ export class VoiceCallController {
               });
           }
         if (this.current(call)) {
+          delete call.activeTurn;
           call.busy = false;
           call.lastSpeechAt = null;
           this.patch({ phase: 'listening' });
         }
       }
     }
+  }
+
+  setBargeIn(enabled: boolean): void {
+    this.patch({ bargeIn: enabled });
+    const call = this.call;
+    if (!call?.capture || !call.busy) return;
+    void (
+      enabled && call.duplex ? call.capture.start() : call.capture.pause()
+    ).catch(() => {
+      this.patch({
+        textFallback: true,
+        error: 'Microphone paused. You can still type a message.',
+      });
+    });
+  }
+
+  private interrupt(call: Call): void {
+    const active = call.activeTurn;
+    if (!active) return;
+    call.playedSentences = active.playback.playedSentences;
+    active.abort.abort();
+    call.queue.stopAll();
+    delete call.activeTurn;
+    call.busy = false;
+    this.patch({
+      phase: 'listening',
+      notice: 'Interrupted. Listening to you.',
+    });
   }
 
   async confirmPlan(decision: 'accept' | 'decline'): Promise<void> {
