@@ -40,7 +40,8 @@ const POSITIVE: Partial<Record<SellerFact['factId'], RegExp>> = {
     /\b(views|visibility|impressions)\b.*\b(dropped|down|fell|falling|lower|decreased)\b/,
   competitor_undercut:
     /\b(competitors?|other sellers)\b.*\b(cut|lower|cheaper|reduced)\b/,
-  can_restock_partial: /\b(can|able|possible)\b.*\b(restock|batch|stock)\b/,
+  can_restock_partial:
+    /\b(i|we) (can|am able|are able)\b.*\b(restock|batch|stock)\b|\b(partial restock|small batch)\b.*\b(possible|feasible)\b/,
 };
 const NEGATIVE: Partial<Record<SellerFact['factId'], RegExp>> = {
   oos_confirmed: /\b(stock is fine|in stock|slow movers|not.*best sellers)\b/,
@@ -58,6 +59,8 @@ export function supportsFact(
   question?: QuestionId,
 ): boolean {
   if (!supportsQuote(fact.quote, utterance)) return false;
+  if (fact.factId === 'can_restock_partial' && /\?/.test(fact.quote))
+    return false;
   const text = normalizeEvidence(fact.quote);
   if (
     /^(yes|yeah|sure|okay|ok)\b/.test(text) &&

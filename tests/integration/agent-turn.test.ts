@@ -149,6 +149,16 @@ const planScript: FakeResponse[] = [
 ];
 
 describe('guarded SellerSaathi streaming turns', () => {
+  it('does not mistake a request to check stock for seller restock capacity', async () => {
+    const app = await rig(findings);
+    const events = await app.turn(
+      'My sales have fallen. Can you check my stock?',
+    );
+    expect(events.at(-1)?.event).toBe('done');
+    expect(app.store.get(app.id).facts.can_restock_partial).toBeUndefined();
+    expect(app.store.get(app.id).questionsAsked).toEqual(['Q_OOS_CONFIRM']);
+    expect(app.llm.requests).toHaveLength(3);
+  });
   it('replays for sixty seconds and releases the completed-turn cache afterwards', async () => {
     let now = 0;
     const app = await rig(
