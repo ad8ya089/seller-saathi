@@ -103,6 +103,7 @@ export class VoiceCallController {
         }
         call.id = session.sessionId;
         call.ready = true;
+        this.dependencies.observe?.session(session);
         call.captureMs = Math.max(
           1,
           Math.min(
@@ -151,6 +152,8 @@ export class VoiceCallController {
       await this.track(this.attachMicrophone(call));
     } catch (error: unknown) {
       if (call && !this.current(call)) return;
+      if (error instanceof AppError)
+        this.dependencies.observe?.error(error.code);
       this.patch({
         initializing: false,
         textFallback: true,
@@ -286,6 +289,8 @@ export class VoiceCallController {
     call.turn += 1;
     this.clearCaptureTimer(call);
     const turn = call.turn;
+    const prefix = `${call.id}-${String(turn)}`;
+    this.dependencies.observe?.turn(prefix);
     this.patch({
       phase: 'processing',
       error: null,
@@ -306,7 +311,7 @@ export class VoiceCallController {
       signal: call.abort.signal,
       now: this.dependencies.now,
       endedAt,
-      prefix: `${call.id}-${String(turn)}`,
+      prefix,
     });
     let failed = false;
     try {
@@ -314,13 +319,19 @@ export class VoiceCallController {
       if (!this.current(call)) return;
       await this.dependencies.send(
         { ...input, turnId: this.dependencies.createId() },
-        (event): Promise<void> => playback.onEvent(event),
+        (event): Promise<void> => {
+          if (this.current(call))
+            this.dependencies.observe?.event(prefix, event);
+          return playback.onEvent(event);
+        },
         call.abort.signal,
       );
       await call.queue.whenIdle();
     } catch (error: unknown) {
       failed = true;
       call.queue.stopAll();
+      if (this.current(call) && error instanceof AppError)
+        this.dependencies.observe?.error(error.code);
       if (this.current(call))
         this.patch({
           error:
@@ -371,6 +382,7 @@ export class VoiceCallController {
     if (!call || call.busy || !plan || !this.current(call)) return;
     call.busy = true;
     this.patch({ phase: 'processing', error: null });
+    this.dependencies.observe?.confirmation(decision, 'pending');
     try {
       await call.capture?.pause();
       const state = await this.dependencies.confirmPlan(
@@ -380,12 +392,18 @@ export class VoiceCallController {
         call.abort.signal,
       );
       if (!this.current(call)) return;
+      this.dependencies.observe?.confirmation(decision, 'complete', state);
       this.patch({ agent: state });
       if (state.phase === 'done') {
         this.endCall();
         return;
       }
     } catch (error: unknown) {
+      if (this.current(call)) {
+        this.dependencies.observe?.confirmation(decision, 'failed');
+        if (error instanceof AppError)
+          this.dependencies.observe?.error(error.code);
+      }
       if (this.current(call))
         this.patch({
           error:

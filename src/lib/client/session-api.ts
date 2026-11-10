@@ -4,6 +4,8 @@ import { agentStateSchema, sessionResponseSchema } from '@/lib/agent/contracts';
 import type { AgentState, SessionResponse } from '@/lib/agent/contracts';
 import { abortable, throwIfAborted } from '@/lib/voice/abort';
 import { httpError } from '@/lib/client/sse';
+import { committedPlanSchema } from '@/lib/domain/plan';
+import type { CommittedPlan } from '@/lib/domain/plan';
 
 async function jsonPost(
   path: string,
@@ -75,4 +77,25 @@ export async function endVoiceSession(sessionId: string): Promise<void> {
   });
   if (!response.ok) throw await httpError(response);
   z.strictObject({ ok: z.literal(true) }).parse(await response.json());
+}
+export async function readCommittedPlan(
+  planId: string,
+  signal: AbortSignal,
+): Promise<CommittedPlan | null> {
+  const response = await abortable(
+    fetch('/api/ledger', {
+      credentials: 'same-origin',
+      mode: 'same-origin',
+      cache: 'no-store',
+      redirect: 'error',
+      signal,
+    }),
+    signal,
+  );
+  if (!response.ok) throw await httpError(response);
+  const records = z
+    .array(committedPlanSchema)
+    .max(20)
+    .parse(await abortable(response.json() as Promise<unknown>, signal));
+  return records.find((record) => record.plan.id === planId) ?? null;
 }

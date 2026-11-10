@@ -2,6 +2,7 @@ import type { EchoEvent, EchoTimings } from '@/lib/voice/events';
 import type { EchoSubmission } from '@/lib/client/sse';
 import type { AudioQueue } from '@/lib/client/audio-queue';
 import type { AgentState, SessionResponse } from '@/lib/agent/contracts';
+import type { ErrorCode } from '@/lib/errors';
 
 export type VoicePhase = 'idle' | 'listening' | 'processing' | 'speaking';
 export interface TranscriptMessage {
@@ -71,6 +72,17 @@ export interface AudioResources {
   ) => Promise<MicrophoneHandle>;
 }
 export interface VoiceDependencies {
+  observe?: {
+    session: (session: SessionResponse) => void;
+    turn: (prefix: string) => void;
+    event: (prefix: string, event: EchoEvent) => void;
+    error: (code: ErrorCode) => void;
+    confirmation: (
+      decision: 'accept' | 'decline',
+      status: 'pending' | 'complete' | 'failed',
+      state?: AgentState,
+    ) => void;
+  };
   createAudio: () => AudioResources;
   createId: () => string;
   now: () => number;

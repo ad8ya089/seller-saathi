@@ -1,11 +1,6 @@
 import type { ReactNode } from 'react';
 import type { VoiceState } from '@/lib/client/voice-state';
-
-function milliseconds(value: number | null | undefined): string {
-  return value === undefined || value === null
-    ? '—'
-    : `${Math.round(value).toLocaleString('en-IN')} ms`;
-}
+import { milliseconds } from '@/lib/client/format';
 
 export function VoiceDebug({ state }: { state: VoiceState }): ReactNode {
   const samples = state.measurements

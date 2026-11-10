@@ -1,6 +1,7 @@
 import type { EchoEvent } from '@/lib/voice/events';
 import type { VoiceState } from '@/lib/client/voice-state';
 import type { AudioQueue } from '@/lib/client/audio-queue';
+import { upsertTranscript } from '@/lib/client/transcript';
 
 interface PlaybackOptions {
   current: () => boolean;
@@ -23,11 +24,7 @@ export class TurnPlayback {
     const id = `${this.options.prefix}-${role}`;
     const messages = this.options.snapshot().messages;
     this.options.patch({
-      messages: messages.some((message) => message.id === id)
-        ? messages.map((message) =>
-            message.id === id ? { ...message, text } : message,
-          )
-        : [...messages, { id, role, text }],
+      messages: upsertTranscript(messages, id, role, text),
     });
   }
   async onEvent(event: EchoEvent): Promise<void> {

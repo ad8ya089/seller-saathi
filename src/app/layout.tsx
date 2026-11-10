@@ -5,7 +5,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'SellerSaathi — Snapdeal Virtual KAM',
   description:
-    'A voice-first seller recovery demo. Under development. Mock data only.',
+    'A voice-first seller recovery workspace with business metrics, evidence-backed diagnosis and an agreed recovery plan. Mock data only.',
 };
 
 export default function RootLayout({
