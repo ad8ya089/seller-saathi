@@ -1,0 +1,10 @@
+node_modules
+.next
+next-env.d.ts
+package-lock.json
+coverage
+.data
+AGENTS.md
+prompt.md
+docs/0*.md
+README.md
