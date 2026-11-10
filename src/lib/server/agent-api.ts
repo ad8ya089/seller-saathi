@@ -81,7 +81,7 @@ export function createSessionHandler(
 ): (request: Request) => Promise<Response> {
   return async (request): Promise<Response> => {
     try {
-      assertSameOrigin(request);
+      assertSameOrigin(request, services.config);
       assertAccess(request, services.config);
       sessionRequestSchema.parse(await readJsonInput(request));
       if (
@@ -97,12 +97,12 @@ export function createSessionHandler(
         throw new AppError('RATE_LIMIT', 'Too many calls', true);
       if (!services.config.providers.gemini)
         throw new AppError('PROVIDER_CONFIG', 'Gemini is not configured');
-      services.warmClips?.();
       const [greeting, data] = await Promise.all([
         services.greeting.get(request.signal),
         services.data(),
       ]);
       throwIfAborted(request.signal);
+      services.warmClips?.();
       const session = services.sessions.create();
       return Response.json(
         sessionResponseSchema.parse({
@@ -127,7 +127,7 @@ export function createTurnHandler(
 ): (request: Request) => Promise<Response> {
   return async (request): Promise<Response> => {
     try {
-      assertSameOrigin(request);
+      assertSameOrigin(request, services.config);
       assertAccess(request, services.config);
       const retryAfter =
         services.limiter?.take(peerKey(request, services.config)) ?? 0;
@@ -145,6 +145,7 @@ export function createTurnHandler(
           },
         );
       const input = await parseEchoInput(request, {
+        ...(services.config.domain ? { domain: services.config.domain } : {}),
         maxBytes: Math.min(1048576, services.config.maxUtteranceBytes),
         maxDurationMs: Math.min(28000, services.config.maxUtteranceMs),
       });
@@ -165,7 +166,7 @@ export function createConfirmHandler(
 ): (request: Request) => Promise<Response> {
   return async (request): Promise<Response> => {
     try {
-      assertSameOrigin(request);
+      assertSameOrigin(request, services.config);
       assertAccess(request, services.config);
       const input = confirmRequestSchema.parse(await readJsonInput(request));
       const signal = AbortSignal.any([

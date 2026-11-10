@@ -5,7 +5,6 @@ import { assertAccess } from '@/lib/server/access';
 import { assertSameOrigin } from '@/lib/server/same-origin';
 import { readJsonInput } from '@/lib/server/turn-input';
 import { apiFailure } from '@/lib/server/agent-api';
-import { AppError } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -26,18 +25,16 @@ export function GET(request: Request): Response {
 }
 export async function POST(request: Request): Promise<Response> {
   try {
-    assertSameOrigin(request);
     const app = getRuntime();
+    assertSameOrigin(request, app.config);
     assertAccess(request, app.config);
     const input = z
       .strictObject({
         sessionId: z.uuid(),
-        turn: z.number().int().min(1).max(25),
+        turn: z.number().int().min(1).max(1024),
       })
       .parse(await readJsonInput(request));
-    const session = app.sessions.get(input.sessionId);
-    if (input.turn > session.turn + 1)
-      throw new AppError('INVALID_INPUT', 'Unknown turn');
+    app.sessions.get(input.sessionId);
     getMetrics().filler(input.sessionId, input.turn);
     return Response.json(
       { ok: true },

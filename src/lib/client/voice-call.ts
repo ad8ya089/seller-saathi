@@ -419,6 +419,17 @@ export class VoiceCallController {
       filler.stop();
       call.queue.stopAll();
       const code = error instanceof AppError ? error.code : 'INTERNAL';
+      if (
+        [
+          'PROVIDER_RATE_LIMIT',
+          'PROVIDER_TIMEOUT',
+          'PROVIDER_UNAVAILABLE',
+        ].includes(code)
+      )
+        this.patch({
+          textFallback: true,
+          notice: 'You can try a typed message below.',
+        });
       const clip: ClipName =
         code === 'NO_SPEECH'
           ? 'reprompt'

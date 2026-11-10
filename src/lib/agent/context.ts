@@ -33,7 +33,12 @@ export function turnContext(
     `[HYPOTHESES: ${hypotheses}]`,
     `[LAST_QUESTION_ID: ${session.questionsAsked.at(-1) ?? 'none'}]`,
     `[LAST_QUESTION_TEXT: ${session.questionsAsked.at(-1) ? QUESTION_BANK[session.questionsAsked.at(-1) as keyof typeof QUESTION_BANK].text : 'none'}]`,
-    `[LAST_SPOKEN_REPLY: ${JSON.stringify(session.history.at(-2)?.spoken ?? '')}]`,
+    `[LAST_SPOKEN_REPLY: ${JSON.stringify(session.playback?.spoken ?? session.history.at(-2)?.spoken ?? '')}]`,
+    ...((session.playback?.interrupted ?? session.history.at(-2)?.interrupted)
+      ? [
+          'The previous reply was interrupted. Only LAST_SPOKEN_REPLY before its interruption marker reached the seller. Do not assume any other signed model text was heard. Use the current phase and plan; an unheard plan must be presented again before later explicit acceptance.',
+        ]
+      : []),
     `[NEXT_QUESTION_ID: ${question ?? 'none'}]`,
     `[NEXT_QUESTION: ${question ? QUESTION_BANK[question].text : 'none'}]`,
     `[ELIGIBLE_ACTION_IDS: ${evaluateActions(

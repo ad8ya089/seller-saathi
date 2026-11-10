@@ -16,6 +16,14 @@ export interface HistoryTurn {
   spoken?: string;
   sentences?: string[];
   interrupted?: boolean;
+  questionId?: QuestionId;
+}
+export interface PlaybackResponse {
+  turn: number;
+  sentences: string[];
+  spoken: string;
+  interrupted: boolean;
+  questionId?: QuestionId;
 }
 export interface Session {
   id: string;
@@ -33,6 +41,7 @@ export interface Session {
   committedPlan?: CommittedPlan;
   pendingCommit?: CommittedPlan;
   history: HistoryTurn[];
+  playback?: PlaybackResponse;
   lastUserText: string;
   counters: {
     sttCalls: number;

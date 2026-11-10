@@ -11,6 +11,26 @@ afterEach(() => {
 });
 
 describe('GET /api/health', () => {
+  it('restricts verbose diagnostics to the configured internal bearer context', async () => {
+    vi.stubEnv('INTERNAL_METRICS_TOKEN', 'private-metrics-test-token');
+    const { GET } = await import('@/app/api/health/route');
+    expect(
+      GET(
+        new Request('http://localhost/api/health?verbose=1', {
+          headers: { 'X-Forwarded-For': '127.0.0.1' },
+        }),
+      ).status,
+    ).toBe(404);
+    const accepted = GET(
+      new Request('http://localhost/api/health?verbose=1', {
+        headers: { Authorization: 'Bearer private-metrics-test-token' },
+      }),
+    );
+    expect(accepted.status).toBe(200);
+    const text = await accepted.text();
+    expect(text).toContain('totalTurns');
+    expect(text).not.toContain('private-metrics-test-token');
+  });
   it('is healthy without optional provider credentials and matches the documented contract', async () => {
     const { GET, runtime, dynamic } = await import('@/app/api/health/route');
     const { healthResponseSchema } = await import('@/lib/server/health');

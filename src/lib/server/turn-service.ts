@@ -17,6 +17,8 @@ interface Completed {
   events: EchoEvent[];
   metrics: TurnMetrics | null;
   completedAt: number;
+  replayAvailable: boolean;
+  bytes: number;
 }
 interface Running {
   fingerprint: string;
@@ -34,6 +36,7 @@ export interface CompletedTurnReport {
   phase?: string;
 }
 export class TurnService {
+  private cachedBytes = 0;
   private readonly completed = new Map<string, Completed>();
   private readonly running = new Map<string, Running>();
   constructor(
@@ -42,6 +45,12 @@ export class TurnService {
     private readonly now: () => number = Date.now,
     private readonly onCompleted?: (report: CompletedTurnReport) => void,
     private readonly admit?: () => void,
+    private readonly maxReplayBytes = 32 * 1024 * 1024,
+    private readonly onPlaybackReceipt?: (
+      sessionId: string,
+      turn: number,
+      played: number,
+    ) => void,
   ) {}
   async run(
     input: EchoInput & { turnId: string },
@@ -55,8 +64,7 @@ export class TurnService {
     this.prune();
     const key = `${input.sessionId}:${input.turnId}`;
     const fingerprint = createHash('sha256')
-      .update(input.kind)
-      .update(String(input.playedSentences ?? ''))
+      .update(JSON.stringify([input.kind, input.playedSentences ?? null]))
       .update(input.kind === 'text' ? input.text : input.wav)
       .digest('hex');
     const cached = this.completed.get(key);
@@ -72,7 +80,7 @@ export class TurnService {
     const replay =
       cached ?? (active ? await abortable(active.result, signal) : undefined);
     if (replay) {
-      if (this.now() - replay.completedAt >= 60000)
+      if (!replay.replayAvailable || this.now() - replay.completedAt >= 60000)
         throw new AppError(
           'REPLAY_EXPIRED',
           'The previous response expired. Start a new call.',
@@ -91,8 +99,14 @@ export class TurnService {
           this.sessions.assertCanTurn(base);
           this.admit?.();
           throwIfAborted(signal);
-          if (input.playedSentences !== undefined)
+          if (input.playedSentences !== undefined) {
             applyPlaybackReceipt(base, input.playedSentences);
+            this.onPlaybackReceipt?.(
+              base.id,
+              base.playback?.turn ?? base.history.at(-1)?.turn ?? base.turn,
+              input.playedSentences,
+            );
+          }
           const draft = cloneSession(base);
           draft.turn += 1;
           const events: EchoEvent[] = [];
@@ -118,6 +132,13 @@ export class TurnService {
               last.sentences = events
                 .filter((event) => event.event === 'sentence')
                 .map((event) => event.data.text);
+            draft.playback = {
+              turn: draft.turn,
+              sentences: last?.sentences ?? [],
+              spoken: last?.spoken ?? '',
+              interrupted: false,
+              ...(last?.questionId ? { questionId: last.questionId } : {}),
+            };
             draft.reprompts = 0;
             replaceSession(base, draft);
             try {
@@ -141,6 +162,7 @@ export class TurnService {
                 ? new AppError('TEXT_REQUIRED', 'Please use text')
                 : error,
             );
+            if (metrics) metrics.usageComplete = false;
             if (!noSpeech) base.turn = draft.turn;
             try {
               this.onCompleted?.({
@@ -177,6 +199,18 @@ export class TurnService {
                 base.history.push(interrupted);
               }
             }
+            const last = draft.history.at(-1);
+            base.playback = {
+              turn: draft.turn,
+              sentences: events
+                .filter((event) => event.event === 'sentence')
+                .map((event) => event.data.text),
+              spoken: '[Reply did not complete.]',
+              interrupted: signal.aborted,
+              ...(last?.turn === draft.turn && last.questionId
+                ? { questionId: last.questionId }
+                : {}),
+            };
             // Facts, questions, phase, proposal and signed history stay at the last
             // successful turn; a staged commitment has never reached the ledger.
             if (noSpeech && !exhausted)
@@ -195,8 +229,15 @@ export class TurnService {
             events,
             metrics,
             completedAt: this.now(),
+            replayAvailable: true,
+            bytes: Buffer.byteLength(JSON.stringify(events)),
           };
           this.completed.set(key, result);
+          this.cachedBytes += result.bytes;
+          for (const cached of this.completed.values()) {
+            if (this.cachedBytes <= this.maxReplayBytes) break;
+            this.releaseAudio(cached);
+          }
           return result;
         },
       ),
@@ -208,10 +249,16 @@ export class TurnService {
       this.running.delete(key);
     }
   }
+  private releaseAudio(result: Completed): void {
+    this.cachedBytes -= result.bytes;
+    result.bytes = 0;
+    result.events = [];
+    result.replayAvailable = false;
+  }
   private prune(): void {
     for (const [key, result] of this.completed)
       if (this.now() - result.completedAt >= 60000) {
-        result.events = [];
+        this.releaseAudio(result);
         try {
           this.sessions.get(key.split(':')[0] ?? '');
         } catch {

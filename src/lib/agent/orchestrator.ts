@@ -26,7 +26,12 @@ import { sessionState } from '@/lib/agent/contracts';
 import { QUESTION_BANK } from '@/lib/domain/questions';
 import { lintSpeech } from '@/lib/domain/speech';
 import type { Phase } from '@/lib/domain/types';
-import type { LlmProvider, ToolResponse } from '@/lib/llm/provider';
+import type { ToolResult } from '@/lib/agent/tool-contracts';
+import type {
+  FunctionRequest,
+  LlmProvider,
+  ToolResponse,
+} from '@/lib/llm/provider';
 import type { SttProvider, TtsProvider } from '@/lib/voice/providers';
 import type { EchoInput } from '@/lib/server/turn-input';
 import type { EmitEchoEvent } from '@/lib/voice/events';
@@ -39,6 +44,7 @@ export interface TurnMetrics {
   ttsFirstMs: number;
   firstAudioMs: number;
   totalMs: number;
+  providerModels?: { stt: string; tts: string };
   usageComplete?: boolean;
   ttsChars?: number;
   fallbacks?: number;
@@ -56,6 +62,7 @@ export interface TurnEnvironment {
   maxToolRounds?: number;
   onCommitPoint?: () => void;
   onMetrics?: (metrics: TurnMetrics) => void;
+  onTool?: (call: FunctionRequest, result: ToolResult) => void;
   now?: () => number;
 }
 export async function runTurn(
@@ -91,7 +98,21 @@ export async function runTurn(
         'Speech recognition is not configured',
       );
     session.counters.sttCalls += 1;
-    transcript = await env.stt.transcribe(input.wav, 'unknown', env.signal);
+    try {
+      transcript = await env.stt.transcribe(input.wav, 'unknown', env.signal);
+    } catch (error: unknown) {
+      if (metrics.providerFallbacks && error instanceof AppError)
+        metrics.providerFallbacks.stt += Math.max(
+          0,
+          (error.providerAttempts ?? 1) - 1,
+        );
+      metrics.fallbacks = metrics.providerFallbacks?.stt ?? 0;
+      metrics.sttMs = now() - started;
+      metrics.totalMs = now() - started;
+      metrics.usageComplete = false;
+      env.onMetrics?.(metrics);
+      throw error;
+    }
   } else transcript = { text: input.text, ms: 0 };
   const parsed = z
     .strictObject({
@@ -100,8 +121,12 @@ export async function runTurn(
       attempts: z.number().int().positive().optional(),
     })
     .safeParse(transcript);
-  if (!parsed.success)
+  if (!parsed.success) {
+    metrics.sttMs = transcript.ms;
+    metrics.totalMs = now() - started;
+    env.onMetrics?.(metrics);
     throw new AppError('NO_SPEECH', 'No usable seller speech was recognized');
+  }
   if (metrics.providerFallbacks)
     metrics.providerFallbacks.stt = Math.max(
       0,
@@ -166,22 +191,34 @@ export async function runTurn(
           true,
         );
       const chunker = new SentenceChunker();
-      const result = await env.llm.stream(
-        {
-          system: `${systemPrompt(env.tools.data.seller.name)}\n\n${turnContext(session, env.tools.data, step.note, env.tools.settings)}`,
-          history: session.history.flatMap((turn) => turn.messages),
-          tools: rounds >= maxRounds ? [] : step.tools,
-          forceTools: step.force,
-        },
-        async (delta): Promise<void> => {
-          if (!metrics.llmFirstMs) metrics.llmFirstMs = now() - started;
-          if (step.force) return;
-          for (const chunk of chunker.push(delta)) await speak(chunk);
-        },
-        env.signal,
-      );
+      const modelStarted = now();
+      let result: Awaited<ReturnType<LlmProvider['stream']>>;
+      try {
+        result = await env.llm.stream(
+          {
+            system: `${systemPrompt(env.tools.data.seller.name)}\n\n${turnContext(session, env.tools.data, step.note, env.tools.settings)}`,
+            history: session.history.flatMap((turn) => turn.messages),
+            tools: rounds >= maxRounds ? [] : step.tools,
+            forceTools: step.force,
+          },
+          async (delta): Promise<void> => {
+            if (!metrics.llmFirstMs) metrics.llmFirstMs = now() - started;
+            if (step.force) return;
+            for (const chunk of chunker.push(delta)) await speak(chunk);
+          },
+          env.signal,
+        );
+      } catch (error: unknown) {
+        if (metrics.providerFallbacks && error instanceof AppError)
+          metrics.providerFallbacks.llm += Math.max(
+            0,
+            (error.providerAttempts ?? 1) - 1,
+          );
+        throw error;
+      } finally {
+        metrics.llmTotalMs += now() - modelStarted;
+      }
       session.counters.llmCalls += 1;
-      metrics.llmTotalMs += result.totalMs;
       metrics.models.push(result.model);
       metrics.usageComplete =
         metrics.usageComplete === true && result.usageComplete === true;
@@ -227,6 +264,7 @@ export async function runTurn(
           metrics.tools.push(name.data);
         }
         const response = await executeTool(session, call, env.tools);
+        env.onTool?.(call, response);
         if (name.success && name.data === 'commit_action_plan' && response.ok) {
           emit({
             event: 'tool',
@@ -246,8 +284,10 @@ export async function runTurn(
     guard ??= createGuard();
     for (const text of guard.complete()) await pipeline.push(text);
     if (reservedQuestion) {
-      if (questionId)
+      if (questionId) {
+        history.questionId = questionId;
         askQuestion(session, questionId, domainState(session, env.tools.data));
+      }
       await pipeline.push(reservedQuestion);
     }
     const finalText = [

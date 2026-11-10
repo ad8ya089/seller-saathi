@@ -4,7 +4,11 @@ import { getMetrics } from '@/lib/server/metrics';
 import { secretMatches } from '@/lib/server/access';
 import appPackage from '../../../../package.json';
 import { getConfig } from '@/lib/server/config';
-import { healthResponseSchema, notFoundSchema } from '@/lib/server/health';
+import {
+  healthResponseSchema,
+  notFoundSchema,
+  verboseHealthSchema,
+} from '@/lib/server/health';
 import { currentSessionCount } from '@/lib/server/session-registry';
 
 export const runtime = 'nodejs';
@@ -22,7 +26,7 @@ export function GET(request: Request): Response {
         )
       )
         return Response.json(
-          {
+          verboseHealthSchema.parse({
             metrics: getMetrics().snapshot(),
             pricing: config.pricing ?? defaultPricing(indiaDay(new Date())),
             speechPricing: SPEECH_PRICING_SOURCE,
@@ -32,7 +36,7 @@ export function GET(request: Request): Response {
               rateLimitTurns: config.rateLimitTurns,
             },
             clips: 'Read /api/clips for readiness',
-          },
+          }),
           { headers },
         );
     } catch {

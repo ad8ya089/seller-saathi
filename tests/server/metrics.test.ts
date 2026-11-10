@@ -50,6 +50,13 @@ describe('operational measurements', () => {
       estimatedDayCost: null,
     });
     expect(JSON.stringify(metrics.snapshot())).not.toContain('transcript');
+    metrics.markInterrupted('session', 1);
+    metrics.markInterrupted('session', 1);
+    expect(metrics.snapshot()).toMatchObject({
+      totalTurns: 3,
+      successfulTurns: 0,
+      interruptedTurns: 2,
+    });
   });
   it('uses actual model identifiers, billing units and announced effective dates', () => {
     const price = defaultPricing('2026-11-11');

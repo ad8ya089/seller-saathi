@@ -8,7 +8,10 @@ const hostSchema = z
   .max(255)
   .regex(/^[A-Za-z0-9.:[\]-]+$/);
 
-export function assertSameOrigin(request: Request): void {
+export function assertSameOrigin(
+  request: Request,
+  deployment?: { domain?: string | undefined },
+): void {
   if (request.headers.get('Sec-Fetch-Site') === 'cross-site')
     throw new AppError('INVALID_INPUT', 'Cross-site requests are not allowed');
   const origin = request.headers.get('Origin');
@@ -23,6 +26,12 @@ export function assertSameOrigin(request: Request): void {
         ? internal.origin
         : new URL(`${internal.protocol}//${hostSchema.parse(host)}`).origin;
     if (origin === expected) return;
+    if (
+      deployment?.domain &&
+      host === deployment.domain &&
+      origin === `https://${deployment.domain}`
+    )
+      return;
   } catch {
     // Invalid authorities and opaque origins fail closed.
   }

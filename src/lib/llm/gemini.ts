@@ -241,6 +241,7 @@ export class Gemini implements LlmProvider {
           deadline.signal.aborted ||
           (error instanceof Error && error.name === 'TimeoutError');
         const failure = publicError(error, timedOut);
+        failure.providerAttempts = attempt + 1;
         const retryable = timedOut || (errorStatus(error) ?? 0) >= 500;
         if (!retryable || delivered || attempt === models.length - 1)
           throw failure;

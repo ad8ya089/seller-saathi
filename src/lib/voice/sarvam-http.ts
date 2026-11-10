@@ -110,6 +110,7 @@ export async function postSarvamJson(
     );
   throwIfAborted(caller);
   const started = performance.now();
+  let attempts = 0;
   const lifetime = new AbortController();
   const overall = setTimeout(
     () => {
@@ -132,6 +133,7 @@ export async function postSarvamJson(
         const init = makeRequest();
         const headers = new Headers(init.headers);
         headers.set('api-subscription-key', settings.apiKey);
+        attempts = attempt + 1;
         const response = await abortable(
           fetcher(`https://api.sarvam.ai/${path}`, {
             ...init,
@@ -172,8 +174,10 @@ export async function postSarvamJson(
   } catch (error: unknown) {
     if (caller?.aborted)
       throw new AppError('REQUEST_ABORTED', 'The request was cancelled');
-    if (error instanceof AppError && error.code !== 'REQUEST_ABORTED')
+    if (error instanceof AppError && error.code !== 'REQUEST_ABORTED') {
+      error.providerAttempts = attempts;
       throw error;
+    }
     if (error instanceof AppError || lifetime.signal.aborted)
       throw new AppError(
         'PROVIDER_TIMEOUT',

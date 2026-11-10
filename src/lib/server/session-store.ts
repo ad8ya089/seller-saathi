@@ -93,7 +93,7 @@ export class SessionStore {
       return await run(session);
     } finally {
       this.busy.delete(id);
-      this.activity.set(id, this.now());
+      if (this.sessions.has(id)) this.activity.set(id, this.now());
     }
   }
   remove(id: string): void {

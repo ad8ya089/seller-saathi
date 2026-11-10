@@ -38,7 +38,9 @@ export class SpeechPipeline {
         maxDurationMs: 120000,
       });
       return { ok: true, result };
-    } catch {
+    } catch (error: unknown) {
+      if (error instanceof AppError)
+        this.retries += Math.max(0, (error.providerAttempts ?? 1) - 1);
       throwIfAborted(this.signal);
       return { ok: false };
     }

@@ -25,6 +25,7 @@ export type EchoInput =
 export interface UploadLimits {
   maxBytes: number;
   maxDurationMs: number;
+  domain?: string;
 }
 const audioFormSchema = z.strictObject({
   sessionId: sessionIdSchema,
@@ -71,7 +72,7 @@ export async function parseEchoInput(
   request: Request,
   limits: UploadLimits,
 ): Promise<EchoInput> {
-  assertSameOrigin(request);
+  assertSameOrigin(request, limits);
   const contentType = request.headers.get('Content-Type') ?? '';
   if (contentType.split(';')[0]?.trim().toLowerCase() === 'application/json') {
     const body = await limitedBody(request, VOICE_LIMITS.textChars * 4 + 1024);

@@ -70,6 +70,18 @@ export class Metrics {
   session(id: string): OperationalTurn | null {
     return this.bySession.get(id) ?? null;
   }
+  markInterrupted(sessionId: string, turn: number): void {
+    const record = this.turns.find(
+      (entry) =>
+        entry.sessionId === sessionId &&
+        entry.turn === turn &&
+        entry.status === 'success',
+    );
+    if (!record) return;
+    record.status = 'interrupted';
+    this.successful -= 1;
+    this.interrupted += 1;
+  }
   snapshot(): object {
     const audio = this.turns
       .filter(

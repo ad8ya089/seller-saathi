@@ -43,6 +43,7 @@ export const errorCodeSchema = z.enum([
 export type ErrorCode = z.infer<typeof errorCodeSchema>;
 
 export class AppError extends Error {
+  providerAttempts?: number;
   constructor(
     public readonly code: ErrorCode,
     message: string,

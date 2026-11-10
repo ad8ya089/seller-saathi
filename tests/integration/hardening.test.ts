@@ -17,6 +17,8 @@ import { GreetingCache } from '@/lib/server/greeting';
 import { FakeStt, FakeTts } from '@/lib/voice/fakes';
 import { FakeLlm } from '@/lib/llm/fake';
 import type { EchoEvent } from '@/lib/voice/events';
+import { abortable } from '@/lib/voice/abort';
+import type { SttProvider, SttResult } from '@/lib/voice/providers';
 import { fixture } from '../fixtures';
 import { wavFixture } from '../voice/fixtures';
 
@@ -63,6 +65,95 @@ function rig(cap = 1): {
   };
 }
 describe('offline hardening boundaries', () => {
+  it('does not lose the next utterance when interruption occurs before transcription', async () => {
+    const sessions = new SessionStore();
+    const session = sessions.create();
+    const abort = new AbortController();
+    let calls = 0;
+    const stt: SttProvider = {
+      transcribe: (_wav, _lang, signal): Promise<SttResult> => {
+        calls += 1;
+        return abortable(
+          new Promise<SttResult>(() => undefined),
+          signal ?? abort.signal,
+        );
+      },
+    };
+    const llm = new FakeLlm([{ text: ['Hello.'] }]);
+    const service = new TurnService(
+      sessions,
+      (): ReturnType<AgentEnvironmentFactory> =>
+        Promise.resolve({
+          llm,
+          stt,
+          tts: new FakeTts(wavFixture({ sampleRate: 24000 })),
+          tools: {
+            data: fixture,
+            today: new Date('2026-11-11T00:00:00Z'),
+            now: (): Date => new Date(),
+            createPlanId: randomUUID,
+            append: (): Promise<void> =>
+              Promise.reject(new Error('Unexpected commit')),
+          },
+        }),
+    );
+    const first = service.run(
+      {
+        kind: 'audio',
+        sessionId: session.id,
+        wav: wavFixture(),
+        turnId: randomUUID(),
+      },
+      () => undefined,
+      abort.signal,
+    );
+    await vi.waitFor(() => {
+      expect(calls).toBe(1);
+    });
+    abort.abort();
+    await first;
+    expect(session.history).toEqual([]);
+    const events: EchoEvent[] = [];
+    await service.run(
+      {
+        kind: 'text',
+        sessionId: session.id,
+        text: 'Hello',
+        playedSentences: 0,
+        turnId: randomUUID(),
+      },
+      (event): void => {
+        events.push(event);
+      },
+      new AbortController().signal,
+    );
+    expect(events.at(-1)?.event).toBe('done');
+    expect(llm.requests).toHaveLength(1);
+    expect(session.lastUserText).toBe('Hello');
+  });
+  it('bounds replay audio memory while retaining the no-rebilling tombstone', async () => {
+    const { services, factory } = rig(800);
+    const session = services.sessions.create();
+    const service = new TurnService(
+      services.sessions,
+      factory,
+      Date.now,
+      undefined,
+      undefined,
+      1,
+    );
+    const input = {
+      kind: 'audio' as const,
+      sessionId: session.id,
+      wav: wavFixture(),
+      turnId: randomUUID(),
+    };
+    await service.run(input, () => undefined, new AbortController().signal);
+    await expect(
+      service.run(input, () => undefined, new AbortController().signal),
+    ).rejects.toMatchObject({ code: 'REPLAY_EXPIRED' });
+    expect(factory).toHaveBeenCalledOnce();
+  });
   it('allows two empty-speech reprompts then directs the seller to text without consuming conversation turns', async () => {
     const { services, stt } = rig(800);
     const session = services.sessions.create();

@@ -1,3 +1,4 @@
+import { TtsLimiter } from '@/lib/voice/tts-limit';
 import 'server-only';
 import { getMetrics } from '@/lib/server/metrics';
 import { AudioCache } from '@/lib/server/audio-cache';
@@ -21,6 +22,7 @@ export class AppRuntime implements AgentServices {
   readonly config = getConfig();
   readonly sessions = getSessionStore(this.config);
   private readonly voice = createSarvamProviders(this.config.sarvam);
+  private readonly limitedTts = new TtsLimiter(this.voice.tts);
   private readonly llm = new Gemini(this.config.gemini);
   readonly limiter = new TokenBucket(
     this.config.rateLimitTurns,
@@ -28,23 +30,27 @@ export class AppRuntime implements AgentServices {
   );
   readonly budget = new DailyBudget(this.config.dailyTurnCap);
   readonly clips = new AudioCache(
-    this.voice.tts,
+    this.limitedTts,
     { ...this.config.sarvam.tts, language: 'en-IN' },
     this.config.providers.sarvam,
   );
-  readonly greeting = new GreetingCache(this.voice.tts);
+  readonly greeting = new GreetingCache(this.limitedTts);
   private loaded: Promise<SellerData> | undefined;
   readonly turns = new TurnService(
     this.sessions,
     async () => ({
       llm: this.llm,
       stt: this.voice.stt,
-      tts: this.voice.tts,
+      tts: this.limitedTts,
       maxToolRounds: this.config.maxToolRounds,
       tools: await this.toolEnvironment(),
     }),
     Date.now,
     (report) => {
+      report.metrics.providerModels = {
+        stt: this.config.sarvam.stt.model,
+        tts: this.config.sarvam.tts.model,
+      };
       const value = getMetrics().record(
         report.sessionId,
         report.turn,
@@ -57,6 +63,14 @@ export class AppRuntime implements AgentServices {
     },
     () => {
       this.budget.accept();
+    },
+    undefined,
+    (sessionId, turn, playedSentences): void => {
+      getMetrics().markInterrupted(sessionId, turn);
+      getLogger().info(
+        { sessionId, turn, playedSentences, interrupted: true },
+        'Playback interrupted',
+      );
     },
   );
   data(): Promise<SellerData> {
@@ -82,15 +96,22 @@ export class AppRuntime implements AgentServices {
       void this.clips.warm();
   }
   warmGreeting(): void {
-    if (!this.config.providers.sarvam || this.config.demoAccessCode) return;
+    if (
+      !this.config.providers.sarvam ||
+      !this.config.providers.gemini ||
+      this.config.demoAccessCode
+    )
+      return;
     if (this.budget.snapshot().accepted >= this.config.dailyTurnCap) return;
-    void this.clips.warm();
-    void this.greeting.get().catch(() => {
-      getLogger().warn(
-        { code: 'GREETING_UNAVAILABLE' },
-        'Greeting prewarm did not complete',
-      );
-    });
+    void this.greeting
+      .get()
+      .then(() => this.clips.warm())
+      .catch(() => {
+        getLogger().warn(
+          { code: 'GREETING_UNAVAILABLE' },
+          'Greeting prewarm did not complete',
+        );
+      });
   }
 }
 const shared = globalThis as typeof globalThis & {

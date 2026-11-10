@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { getRuntime } from '@/lib/server/runtime';
 import { apiFailure, createSessionHandler } from '@/lib/server/agent-api';
+import { assertAccess } from '@/lib/server/access';
 import { assertSameOrigin } from '@/lib/server/same-origin';
 import { readJsonInput } from '@/lib/server/turn-input';
 
@@ -15,7 +16,9 @@ export async function POST(request: Request): Promise<Response> {
 }
 export async function DELETE(request: Request): Promise<Response> {
   try {
-    assertSameOrigin(request);
+    const app = getRuntime();
+    assertSameOrigin(request, app.config);
+    assertAccess(request, app.config);
     const input = z
       .strictObject({ sessionId: z.uuid() })
       .parse(await readJsonInput(request));
