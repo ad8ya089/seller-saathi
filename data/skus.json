@@ -1,0 +1,79 @@
+{
+  "synthetic": true,
+  "skus": [
+    {
+      "sku": "KUR-101",
+      "spokenName": "cotton printed kurti set",
+      "ordersLast": 96,
+      "ordersThis": 31,
+      "stock": 0,
+      "oosSinceDay": 9,
+      "note": ""
+    },
+    {
+      "sku": "KUR-102",
+      "spokenName": "rayon A-line kurti",
+      "ordersLast": 72,
+      "ordersThis": 62,
+      "stock": 140,
+      "note": "healthy"
+    },
+    {
+      "sku": "SAR-201",
+      "spokenName": "printed georgette saree",
+      "ordersLast": 58,
+      "ordersThis": 22,
+      "stock": 0,
+      "oosSinceDay": 12,
+      "note": "supplier delay"
+    },
+    {
+      "sku": "DUP-301",
+      "spokenName": "dupatta set",
+      "ordersLast": 44,
+      "ordersThis": 42,
+      "stock": 85,
+      "note": "healthy"
+    },
+    {
+      "sku": "KUR-103",
+      "spokenName": "straight kurti-pant set",
+      "ordersLast": 36,
+      "ordersThis": 14,
+      "stock": 0,
+      "oosSinceDay": 6,
+      "note": ""
+    },
+    {
+      "sku": "LEG-401",
+      "spokenName": "leggings pack of 2",
+      "ordersLast": 30,
+      "ordersThis": 38,
+      "stock": 160,
+      "note": "healthy, gaining"
+    },
+    {
+      "sku": "PAL-501",
+      "spokenName": "cotton palazzo",
+      "ordersLast": 26,
+      "ordersThis": 28,
+      "stock": 95,
+      "note": "healthy"
+    },
+    {
+      "sku": "SUT-601",
+      "spokenName": "unstitched cotton suit",
+      "ordersLast": 20,
+      "ordersThis": 19,
+      "stock": 3,
+      "note": "low stock"
+    }
+  ],
+  "tail": {
+    "listings": 52,
+    "ordersLast": 18,
+    "ordersThis": 14,
+    "oosLast": 5,
+    "oosThis": 15
+  }
+}

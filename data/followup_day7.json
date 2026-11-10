@@ -1,0 +1,17 @@
+{
+  "synthetic": true,
+  "windowDays": 7,
+  "rolling7": {
+    "orders": 83,
+    "ordersPerDay": 11.9,
+    "cancelRate": 0.096,
+    "oosProducts": 11
+  },
+  "baselineThisMonthOrdersPerDay": 9.0,
+  "actionStatus": {
+    "A_RESTOCK_TOP": "partial",
+    "A_STOCK_SYNC": "done",
+    "A_PUSH_INSTOCK": "done"
+  },
+  "skuStock": { "KUR-101": 60, "SAR-201": 0, "KUR-103": 0 }
+}

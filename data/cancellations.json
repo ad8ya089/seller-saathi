@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "reasons": [
+    { "reason": "stock_unavailable", "last": 8, "this": 21 },
+    { "reason": "dispatch_delay", "last": 6, "this": 7 },
+    { "reason": "buyer_cancelled", "last": 12, "this": 7 },
+    { "reason": "courier_issue", "last": 6, "this": 3 }
+  ],
+  "roundingNote": "37.8 rounded to 38"
+}

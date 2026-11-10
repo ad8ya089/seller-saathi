@@ -1,0 +1,35 @@
+{
+  "sellerId": "SDX-DEMO-1042",
+  "name": "Sharma Fashion Hub",
+  "city": "Surat, Gujarat",
+  "category": "Women's ethnic wear",
+  "activeListings": 60,
+  "asp": 500,
+  "periods": {
+    "last": {
+      "label": "Last month",
+      "sales": 200000,
+      "orders": 400,
+      "cancelRate": 0.08,
+      "asp": 500,
+      "oosProducts": 5
+    },
+    "this": {
+      "label": "This month",
+      "sales": 135000,
+      "orders": 270,
+      "cancelRate": 0.14,
+      "asp": 500,
+      "oosProducts": 18
+    }
+  },
+  "synthetic": ["skus", "cancellations", "followupDay7"],
+  "unavailable": [
+    "impressions",
+    "clicks",
+    "conversion",
+    "competitorPrices",
+    "returns",
+    "categoryBenchmark"
+  ]
+}
