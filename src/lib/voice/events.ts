@@ -1,8 +1,9 @@
 import { z } from 'zod';
+import { errorCodeSchema } from '@/lib/errors';
 import { VOICE_LIMITS } from '@/lib/voice/limits';
 
 export const publicErrorSchema = z.strictObject({
-  code: z.string().min(1).max(64),
+  code: errorCodeSchema,
   message: z.string().min(1).max(300),
   retryable: z.boolean(),
 });
