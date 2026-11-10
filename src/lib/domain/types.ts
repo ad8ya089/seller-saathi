@@ -1,4 +1,5 @@
 import { z } from 'zod';
+export type { PlanAction, ActionPlan, CommittedPlan } from '@/lib/domain/plan';
 import type {
   SellerSnapshot,
   SkuData,
