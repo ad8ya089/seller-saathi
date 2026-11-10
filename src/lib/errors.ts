@@ -24,6 +24,15 @@ export const errorCodeSchema = z.enum([
   'STREAM_INVALID',
   'AUDIO_PLAYBACK',
   'MICROPHONE_UNAVAILABLE',
+  'SESSION_NOT_FOUND',
+  'SESSION_EXPIRED',
+  'SESSION_LIMIT',
+  'SESSION_BUSY',
+  'TURN_CONFLICT',
+  'TOOL_NOT_ALLOWED',
+  'COMMIT_REJECTED',
+  'LLM_LOOP_LIMIT',
+  'SPEECH_INVALID',
   'INTERNAL',
 ]);
 export type ErrorCode = z.infer<typeof errorCodeSchema>;

@@ -1,0 +1,80 @@
+import type { ActionPlan, CommittedPlan } from '@/lib/domain/plan';
+import type {
+  DomainState,
+  HypothesisScore,
+  Phase,
+  QuestionId,
+  SellerFacts,
+} from '@/lib/domain/types';
+import type { SellerData } from '@/lib/domain/data-schemas';
+import type { LlmMessage, TokenUsage } from '@/lib/llm/provider';
+import type { ToolName } from '@/lib/agent/tool-contracts';
+
+export interface HistoryTurn {
+  turn: number;
+  messages: LlmMessage[];
+}
+export interface Session {
+  id: string;
+  createdAt: number;
+  lang: 'en-IN';
+  mode: 'call';
+  phase: Phase;
+  turn: number;
+  questionsAsked: QuestionId[];
+  facts: SellerFacts;
+  toolsCalled: Set<ToolName>;
+  hypotheses: HypothesisScore[];
+  proposedPlan?: { plan: ActionPlan; proposedAtTurn: number };
+  committedPlan?: CommittedPlan;
+  pendingCommit?: CommittedPlan;
+  history: HistoryTurn[];
+  lastUserText: string;
+  counters: {
+    sttCalls: number;
+    ttsChars: number;
+    llmCalls: number;
+    tokens: TokenUsage;
+  };
+}
+export function domainState(session: Session, data: SellerData): DomainState {
+  return {
+    snapshot: data.seller,
+    skus: data.skus,
+    cancellations: data.cancellations,
+    facts: session.facts,
+    questionsAsked: session.questionsAsked,
+    toolsCalled: new Set(
+      [...session.toolsCalled].filter(
+        (name) =>
+          name === 'get_seller_snapshot' ||
+          name === 'get_sku_breakdown' ||
+          name === 'get_cancellation_breakdown' ||
+          name === 'get_listing_funnel',
+      ),
+    ),
+  };
+}
+export function cloneSession(session: Session): Session {
+  return {
+    ...session,
+    facts: { ...session.facts },
+    questionsAsked: [...session.questionsAsked],
+    toolsCalled: new Set(session.toolsCalled),
+    hypotheses: [...session.hypotheses],
+    history: session.history.map((turn) => ({
+      turn: turn.turn,
+      messages: [...turn.messages],
+    })),
+    counters: { ...session.counters, tokens: { ...session.counters.tokens } },
+  };
+}
+export function trimHistory(session: Session, maxMessages = 12): void {
+  // Trim complete older seller turns, never half a signed tool exchange.
+  while (
+    session.history.length > 1 &&
+    session.history.reduce((count, turn) => count + turn.messages.length, 0) >
+      maxMessages
+  )
+    session.history.shift();
+}

@@ -6,6 +6,7 @@ import { AppError } from '@/lib/errors';
 import { committedPlanSchema } from '@/lib/domain/plan';
 import type { CommittedPlan } from '@/lib/domain/plan';
 import { getConfig } from '@/lib/server/config';
+import { throwIfAborted } from '@/lib/voice/abort';
 
 // One long-lived process owns this demo ledger. Serialize appends per file.
 const writes = new Map<string, Promise<void>>();
@@ -51,6 +52,7 @@ async function readRecords(filename: string): Promise<CommittedPlan[]> {
 export async function appendPlan(
   input: unknown,
   dataDir: string = getConfig().dataDir,
+  options?: { once?: boolean; signal?: AbortSignal },
 ): Promise<void> {
   const parsed = committedPlanSchema.safeParse(input);
   if (!parsed.success)
@@ -63,7 +65,25 @@ export async function appendPlan(
     .then(async (): Promise<void> => {
       try {
         await mkdir(directory, { recursive: true, mode: 0o700 });
-        await readRecords(filename);
+        const existing = await readRecords(filename);
+        throwIfAborted(options?.signal);
+        if (options?.once) {
+          const prior = existing.find(
+            (record) => record.plan.id === parsed.data.plan.id,
+          );
+          if (prior) {
+            if (
+              JSON.stringify(prior.plan) !== JSON.stringify(parsed.data.plan) ||
+              [...prior.acceptedActionIds].sort().join(',') !==
+                [...parsed.data.acceptedActionIds].sort().join(',')
+            )
+              throw new AppError(
+                'LEDGER_INVALID',
+                'A different commitment already uses this plan identifier',
+              );
+            return;
+          }
+        }
         await appendFile(filename, `${JSON.stringify(parsed.data)}\n`, {
           encoding: 'utf8',
           flag: 'a',

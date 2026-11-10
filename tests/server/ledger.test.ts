@@ -42,6 +42,23 @@ function record(id: string): CommittedPlan {
 }
 
 describe('append-only committed-plan ledger', () => {
+  it('supports unique guarded appends without changing the versioned P1 append contract', async () => {
+    await Promise.all(
+      Array.from({ length: 4 }, () =>
+        appendPlan(record('once'), directory, { once: true }),
+      ),
+    );
+    expect(await listLatest(20, directory)).toHaveLength(1);
+    const abort = new AbortController();
+    abort.abort();
+    await expect(
+      appendPlan(record('cancelled'), directory, {
+        signal: abort.signal,
+        once: true,
+      }),
+    ).rejects.toMatchObject({ code: 'REQUEST_ABORTED' });
+    expect(await listLatest(20, directory)).toHaveLength(1);
+  });
   it('creates the directory, appends JSONL and preserves the existing prefix', async () => {
     const nested = join(directory, 'nested');
     await appendPlan(record('first'), nested);
