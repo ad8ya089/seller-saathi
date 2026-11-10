@@ -114,7 +114,7 @@ export function PlanPanel({
             {plan.checkpoint.successMetric}
           </p>
           <p className="mt-3 border-t border-slate-200 pt-3 text-xs leading-5 text-slate-600">
-            {plan.impact}
+              {plan.checkpoint.impact}
           </p>
         </section>
       )}

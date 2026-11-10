@@ -63,6 +63,7 @@ describe('diagnosis and recovery presentation', () => {
     ])
       expect(html).toContain(text);
     expect(html).not.toContain('Saved to demo ledger');
+    expect(html).toContain(fixture.committed.plan.checkpoint.impact);
   });
   it('disables confirmation while pending and never claims success after a failure', () => {
     let state = appReducer(proposed(), {
