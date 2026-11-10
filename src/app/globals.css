@@ -20,3 +20,20 @@ body {
   outline: 3px solid #b91c1c;
   outline-offset: 4px;
 }
+
+.voice-orb[data-phase='processing'] {
+  animation: voice-pulse 1.2s ease-in-out infinite;
+}
+.voice-orb[data-phase='speaking'] {
+  animation: voice-pulse 0.7s ease-in-out infinite;
+}
+@keyframes voice-pulse {
+  50% {
+    transform: scale(1.06);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-orb {
+    animation: none !important;
+  }
+}
