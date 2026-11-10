@@ -5,6 +5,7 @@ import { abortable, throwIfAborted } from '@/lib/voice/abort';
 import { sessionIdSchema, textTurnSchema } from '@/lib/voice/events';
 import { VOICE_LIMITS } from '@/lib/voice/limits';
 import { validateWav } from '@/lib/voice/wav';
+import { assertSameOrigin } from '@/lib/server/same-origin';
 
 export type EchoInput =
   | { kind: 'text'; sessionId: string; text: string }
@@ -56,12 +57,7 @@ export async function parseEchoInput(
   request: Request,
   limits: UploadLimits,
 ): Promise<EchoInput> {
-  const origin = request.headers.get('Origin');
-  if (origin !== null && origin !== new URL(request.url).origin)
-    throw new AppError(
-      'INVALID_INPUT',
-      'Cross-origin requests are not allowed',
-    );
+  assertSameOrigin(request);
   const contentType = request.headers.get('Content-Type') ?? '';
   if (contentType.split(';')[0]?.trim().toLowerCase() === 'application/json') {
     const body = await limitedBody(request, VOICE_LIMITS.textChars * 4 + 1024);

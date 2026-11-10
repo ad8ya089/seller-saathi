@@ -292,4 +292,22 @@ describe('streaming voice echo API', () => {
     expect(stt.calls).toHaveLength(0);
     expect(tts.calls).toHaveLength(0);
   });
+  it('accepts the browser Host when Next exposes an internal localhost request URL', async () => {
+    const { handler } = setup();
+    const request = textRequest();
+    request.headers.set('Host', '127.0.0.1:4101');
+    request.headers.set('Origin', 'http://127.0.0.1:4101');
+    expect((await handler(request)).status).toBe(200);
+  });
+  it.each(['http://other.example', 'http://localhost:4101', 'null'])(
+    'rejects Origin %s when the browser Host differs from the internal URL',
+    async (origin) => {
+      const { handler, tts } = setup();
+      const request = textRequest();
+      request.headers.set('Host', '127.0.0.1:4101');
+      request.headers.set('Origin', origin);
+      expect((await handler(request)).status).toBe(400);
+      expect(tts.calls).toHaveLength(0);
+    },
+  );
 });
