@@ -2,6 +2,8 @@
 
 One Next.js (TypeScript) service, long-lived Node container. No DB, no queue, no vector store, no agent framework.
 
+P2 status: only the echo path is active, with `transcript`, `sentence`, `audio`, `done` and `error` events. Its `done.timings` contains `sttMs`, `ttsFirstMs`, `totalMs`; `turn` is 1 for each stateless server request. The browser counts turns within a call. Session APIs/state, LLM/tool events, barge-in, fillers and browser speech-synthesis fallback below are future-phase design. P2 surfaces sanitized errors and lets the user retry, avoiding automatic duplicate submissions. See [P2 report](p2-report.md).
+
 ## 1. Component view
 
 ```mermaid
@@ -146,9 +148,9 @@ Fact enum: `oos_confirmed(yes|no|partial)`, `restock_cause(supplier_delay|cash_c
 
 ## 6. Provider adapters (`src/lib/voice`, `src/lib/llm`)
 
-**Sarvam STT** — `POST https://api.sarvam.ai/speech-to-text`, multipart (`file`, `model`, `mode`, `language_code`), header `api-subscription-key`. ≤30 s audio. Response `{request_id, transcript}`. Env: `SARVAM_STT_MODEL` (default `saaras:v3`; try `saaras:v4`), `SARVAM_STT_LANGUAGE`. Timeout 6 s, 1 retry on 429/5xx.
+**Sarvam STT** — `POST https://api.sarvam.ai/speech-to-text`, multipart (`file`, `model`, `mode`, `language_code`), header `api-subscription-key`. Browser uploads are capped at 28 s, mono PCM16/16 kHz and 1 MiB. Response validates `request_id`, `transcript` and `language_code`. Env: `SARVAM_STT_MODEL` (default `saaras:v4`, v3 supported), `SARVAM_STT_MODE` (default `transcribe`), `SARVAM_STT_LANGUAGE` (default `unknown`). Timeout 6 s, at most one retry on 429/5xx within a 13 s total default deadline; bounded Retry-After honored.
 
-**Sarvam TTS** — `POST https://api.sarvam.ai/text-to-speech`, JSON `{text, model:"bulbul:v3", speaker, pace, speech_sample_rate:24000, language code}` → `audios[]` base64 WAV; join + decode. The language field is `language_code` in some pages and `target_language_code` in others → adapter sends per smoke-test result. Timeout 6 s, 1 retry; fallback = browser `speechSynthesis` for that sentence.
+**Sarvam TTS** — `POST https://api.sarvam.ai/text-to-speech`, JSON `{text, model, language_code, speaker, pace, speech_sample_rate:24000, output_audio_codec:"wav"}`. Default `bulbul:v4-flash` / `shubh_enhi_ads`; v3 uses short speaker names. Model/speaker formats must match. Validate exactly one `audios[]` output for one text, decode base64 and validate mono PCM16/24 kHz WAV; never concatenate outputs. Same timeout/retry policy as STT. [Provider notes](provider-notes.md) record current official contracts and successful live calls.
 
 **Gemini** — `@google/genai`. Model `GEMINI_MODEL=gemini-3.5-flash-lite`, fallback `gemini-3.6-flash`. Streaming generate with function declarations. Rules: (1) feed the model's returned `Content` (including any thought-signature parts) back verbatim on tool continuation; (2) thinking set to minimal/low via env (name differs by model — verify in smoke test); (3) `maxOutputTokens` ≈ 300; (4) temperature 0.4. Thinking tokens bill as output.
 

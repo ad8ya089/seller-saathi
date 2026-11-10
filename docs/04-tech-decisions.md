@@ -9,7 +9,7 @@ Each decision: **choice → why → rejected → revisit if**. Verified-today it
 | App | Next.js (App Router) + TypeScript strict, Node 22, one service |
 | Voice in | Browser mic + Silero VAD (vad-web) → WAV → Sarvam **Saaras** STT ✔ |
 | Reasoning | Gemini **3.5 Flash-Lite** (`gemini-3.5-flash-lite`) ✔ w/ fallback `gemini-3.6-flash` ✔, via `@google/genai` function calling |
-| Voice out | Sarvam **Bulbul v3** TTS ✔, sentence-streamed |
+| Voice out | Sarvam **Bulbul v4 Flash** TTS, live smoke verified; v3 configurable |
 | Brain logic | Deterministic TS domain engine + zod-validated tools |
 | State | In-memory sessions + JSONL ledger |
 | Deploy | AWS EC2 t4g.small, Mumbai, Docker Compose + Caddy + DuckDNS, SSM secrets |
@@ -22,8 +22,9 @@ Each decision: **choice → why → rejected → revisit if**. Verified-today it
 - **Revisit if:** p50 first-audio > 4 s after optimisations → hybrid: Live API for chit-chat, in-process tools unchanged.
 
 ### D2 — Sarvam for STT + TTS
+- **P2 verified correction:** defaults are `saaras:v4` / `transcribe` and `bulbul:v4-flash` / `shubh_enhi_ads`. Both v4/v3 STT modes tested successfully; five v4 persona speakers returned valid 24 kHz WAV. REST TTS uses `language_code` and `output_audio_codec=wav`. The v3 price assumptions below are historical planning inputs, not a verified v4 bill. See [provider notes](provider-notes.md).
 - **Why:** Indian English + Hindi + code-mix, INR billing, ₹100 free credits ✔ (one Sarvam marketing page says ₹1,000 — check dashboard), simple REST, ≤30 s sync STT ✔, TTS returns base64 WAV ✔, 30+ voices.
-- **Risks (mitigated):** model/field naming differs across doc pages (`saaras:v3` vs `v4`; `language_code` vs `target_language_code`; TTS `bulbul:v3` is what pricing/docs show — I found **no** "Bulbul v4 Flash" page) → env-configured + `smoke-sarvam.ts` picks the working combination before any code depends on it.
+- **Risks (mitigated):** STT mode descriptions differ between the current official reference and guide, and speaker identifiers differ by TTS model. Validated environment settings, model/speaker compatibility checks and the bounded live smoke establish the working contract; results are recorded in `provider-notes.md`.
 - **Rejected:** browser Web Speech API (inconsistent, Chrome-only, poor Indic accents) → kept only as TTS fallback; Gemini TTS (preview IDs rotate: `gemini-3.1-flash-tts-preview` shuts down 17 Nov 2026 ✔); ElevenLabs/Deepgram (stronger English, weaker Indic/₹ billing).
 - **Revisit if:** voice sounds robotic after speaker audition → try other Bulbul speakers/pace; or Sarvam streaming TTS (WebSocket).
 
@@ -37,6 +38,7 @@ Each decision: **choice → why → rejected → revisit if**. Verified-today it
 - Same language end to end (TS), SSE via route handlers, you already ship Next/React/TS. n8n (KodeKloud) is wrong here: per-turn latency, audio, and streaming control. Python/FastAPI would be fine but doubles tooling for no gain.
 
 ### D5 — Hands-free VAD, barge-in, sentence-streamed TTS (30 marks live here)
+- **P2 boundary:** hands-free local Silero v6, ordered TTS with two requests in flight, and half-duplex capture are implemented. VAD pauses through processing/playback and a 200 ms tail; barge-in and cached fillers remain P5. Browser timing is scheduled playback, not proof of audible onset.
 - Push-to-talk feels like a walkie-talkie. Silero VAD in-browser gives natural turn-taking; sentence pipelining cuts perceived latency by ~50%; barge-in is the single most "human" behaviour. Fallback toggles exist (half-duplex, text).
 
 ### D6 — Streaming plain text + tools for state (not per-turn JSON)
