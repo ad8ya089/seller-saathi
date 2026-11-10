@@ -27,6 +27,14 @@ export function verifiedAcceptance(quote: string, utterance: string): boolean {
     )
   )
     return false;
+  // A complete explicit acceptance of the current plan is also affirmative.
+  // Keep the whole utterance anchored; never extract consent from a longer reply.
+  if (
+    /^(?:(?:yes|yeah|yep|sure|okay|ok) )?i explicitly accept (?:this|the|the proposed) plan$/.test(
+      text,
+    )
+  )
+    return true;
   return /^(?:(?:yes|yeah|yep|sure|okay|ok|agreed)(?:\s+(?:please|go ahead|and|save (?:it|this|this plan|the plan)|do that|lets do it|lets proceed|proceed|i agree|that works))*|i (?:agree|accept)(?: (?:to|with) (?:this|the) plan)?|(?:please )?save (?:it|this|this plan|the plan)|go ahead(?: and save (?:it|the plan))?)$/.test(
     text,
   );

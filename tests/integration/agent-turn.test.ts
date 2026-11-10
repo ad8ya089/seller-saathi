@@ -282,64 +282,70 @@ describe('guarded SellerSaathi streaming turns', () => {
     expect(app.store.get(app.id).phase).toBe('confirm');
     expect(await listLatest(20, app.directory)).toHaveLength(0);
   });
-  it('S1 completes findings, two questions, verified acceptance and exactly one ledger line', async () => {
-    const app = await rig([
-      ...findings,
-      confirmation,
-      { text: ['Understood, I have noted the supplier delay.'] },
-      ...planScript,
-      call('commit_action_plan', {
-        planId: 'p3-test-plan',
-        acceptedActionIds: actions,
-        confirmationQuote: 'Yes, please save it.',
-      }),
-      { text: [speech.summary] },
-    ]);
-    const turns: EchoEvent[][] = [];
-    turns.push(await app.turn('My sales have dropped this month.'));
-    turns.push(await app.turn('Yes, both. The supplier is late.'));
-    turns.push(await app.turn('Maybe ten days.'));
-    expect(app.store.get(app.id).phase).toBe('confirm');
-    expect(await listLatest(20, app.directory)).toHaveLength(0);
-    const lastId = randomUUID();
-    const last = await app.turn('Yes, please save it.', lastId);
-    turns.push(last);
-    expect(last.at(-1)?.event).toBe('done');
-    expect(app.store.get(app.id).phase).toBe('done');
-    expect(app.store.get(app.id).questionsAsked).toEqual([
-      'Q_OOS_CONFIRM',
-      'Q_RESTOCK_ETA',
-    ]);
-    const records = await listLatest(20, app.directory);
-    expect(records).toHaveLength(1);
-    expect(records[0]?.plan.followUpDate).toBe('2026-11-17');
-    expect(
-      (await readFile(join(app.directory, 'ledger.jsonl'), 'utf8'))
-        .trim()
-        .split('\n'),
-    ).toHaveLength(1);
-    const calls = app.llm.requests.length;
-    const ttsCalls = app.tts.calls.length;
-    expect(await app.turn('Yes, please save it.', lastId)).toEqual(last);
-    expect(app.llm.requests).toHaveLength(calls);
-    expect(app.tts.calls).toHaveLength(ttsCalls);
-    expect(await listLatest(20, app.directory)).toHaveLength(1);
-    for (const [index, events] of turns.entries()) {
-      expect(events[0]?.event).toBe('transcript');
-      expect(events.at(-1)?.event).toBe('done');
-      const sentences = events.filter((event) => event.event === 'sentence');
-      const audios = events.filter((event) => event.event === 'audio');
-      expect(audios.map((event) => event.data.idx)).toEqual(
-        sentences.map((event) => event.data.idx),
-      );
+  it.each([
+    'Yes, please save it.',
+    'Yes, I explicitly accept the proposed plan.',
+  ])(
+    'S1 completes findings, two questions and one ledger line for acceptance: %s',
+    async (acceptance) => {
+      const app = await rig([
+        ...findings,
+        confirmation,
+        { text: ['Understood, I have noted the supplier delay.'] },
+        ...planScript,
+        call('commit_action_plan', {
+          planId: 'p3-test-plan',
+          acceptedActionIds: actions,
+          confirmationQuote: acceptance,
+        }),
+        { text: [speech.summary] },
+      ]);
+      const turns: EchoEvent[][] = [];
+      turns.push(await app.turn('My sales have dropped this month.'));
+      turns.push(await app.turn('Yes, both. The supplier is late.'));
+      turns.push(await app.turn('Maybe ten days.'));
+      expect(app.store.get(app.id).phase).toBe('confirm');
+      expect(await listLatest(20, app.directory)).toHaveLength(0);
+      const lastId = randomUUID();
+      const last = await app.turn(acceptance, lastId);
+      turns.push(last);
+      expect(last.at(-1)?.event).toBe('done');
+      expect(app.store.get(app.id).phase).toBe('done');
+      expect(app.store.get(app.id).questionsAsked).toEqual([
+        'Q_OOS_CONFIRM',
+        'Q_RESTOCK_ETA',
+      ]);
+      const records = await listLatest(20, app.directory);
+      expect(records).toHaveLength(1);
+      expect(records[0]?.plan.followUpDate).toBe('2026-11-17');
       expect(
-        lintSpeech(
-          sentences.map((event) => event.data.text).join(' '),
-          index === 0 ? 'findings' : index === 2 ? 'recommend' : 'summary',
-        ).ok,
-      ).toBe(true);
-    }
-  });
+        (await readFile(join(app.directory, 'ledger.jsonl'), 'utf8'))
+          .trim()
+          .split('\n'),
+      ).toHaveLength(1);
+      const calls = app.llm.requests.length;
+      const ttsCalls = app.tts.calls.length;
+      expect(await app.turn(acceptance, lastId)).toEqual(last);
+      expect(app.llm.requests).toHaveLength(calls);
+      expect(app.tts.calls).toHaveLength(ttsCalls);
+      expect(await listLatest(20, app.directory)).toHaveLength(1);
+      for (const [index, events] of turns.entries()) {
+        expect(events[0]?.event).toBe('transcript');
+        expect(events.at(-1)?.event).toBe('done');
+        const sentences = events.filter((event) => event.event === 'sentence');
+        const audios = events.filter((event) => event.event === 'audio');
+        expect(audios.map((event) => event.data.idx)).toEqual(
+          sentences.map((event) => event.data.idx),
+        );
+        expect(
+          lintSpeech(
+            sentences.map((event) => event.data.text).join(' '),
+            index === 0 ? 'findings' : index === 2 ? 'recommend' : 'summary',
+          ).ok,
+        ).toBe(true);
+      }
+    },
+  );
   it('S6 asks capacity once, replans around feasible actions and does not save without acceptance', async () => {
     const app = await rig([
       ...findings,
