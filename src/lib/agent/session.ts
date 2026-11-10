@@ -13,6 +13,7 @@ import type { ToolName } from '@/lib/agent/tool-contracts';
 export interface HistoryTurn {
   turn: number;
   messages: LlmMessage[];
+  spoken?: string;
 }
 export interface Session {
   id: string;
@@ -63,7 +64,7 @@ export function cloneSession(session: Session): Session {
     toolsCalled: new Set(session.toolsCalled),
     hypotheses: [...session.hypotheses],
     history: session.history.map((turn) => ({
-      turn: turn.turn,
+      ...turn,
       messages: [...turn.messages],
     })),
     counters: { ...session.counters, tokens: { ...session.counters.tokens } },
