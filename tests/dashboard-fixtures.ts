@@ -71,6 +71,12 @@ export function dashboardFixture(): DashboardFixture {
       quote: 'Ten days.',
       turn: 3,
     },
+    restock_cause: {
+      factId: 'restock_cause',
+      value: 'supplier_delay',
+      quote: 'The supplier is late.',
+      turn: 2,
+    },
   };
   state.questionsAsked.push('Q_RESTOCK_ETA');
   state.hypotheses = computeDiagnosis(domainState(state, fixture)).hypotheses;
@@ -82,6 +88,8 @@ export function dashboardFixture(): DashboardFixture {
   );
   state.proposedPlan = { plan, proposedAtTurn: 3 };
   const proposed = sessionState(state);
+  const declined: AgentState = { ...proposed, phase: 'recommend' };
+  delete declined.plan;
   const committed: CommittedPlan = {
     schemaVersion: 1,
     event: 'plan_committed',
@@ -95,7 +103,7 @@ export function dashboardFixture(): DashboardFixture {
     findings,
     proposed,
     saved: { ...proposed, phase: 'done', committed: true },
-    declined: { ...findings, phase: 'recommend' },
+    declined,
     committed,
   };
 }
