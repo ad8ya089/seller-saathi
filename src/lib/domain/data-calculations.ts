@@ -24,10 +24,7 @@ export function inventoryMetrics(
   const oos = data.skus.filter((sku) => sku.stock === 0);
   const oosOrdersLast = oos.reduce((total, sku) => total + sku.ordersLast, 0);
   const oosOrdersThis = oos.reduce((total, sku) => total + sku.ordersThis, 0);
-  const oosDecline = oos.reduce(
-    (total, sku) => total + Math.max(0, sku.ordersLast - sku.ordersThis),
-    0,
-  );
+  const oosDecline = Math.max(0, oosOrdersLast - oosOrdersThis);
   const grossOrderDecline = Math.max(
     0,
     seller.periods.last.orders - seller.periods.this.orders,

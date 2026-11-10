@@ -39,6 +39,8 @@ describe('environment configuration', () => {
   });
 
   it.each([
+    { GEMINI_RETRIES: '' },
+    { ASP_FLAT_PCT: ' ' },
     { PORT: '0' },
     { PORT: 'not-a-number' },
     { LOG_TRANSCRIPTS: 'yes' },

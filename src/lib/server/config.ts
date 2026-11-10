@@ -15,12 +15,14 @@ const optionalText = z.preprocess(
     typeof value === 'string' && value.trim() === '' ? undefined : value,
   z.string().trim().min(1).optional(),
 );
+const numeric = (schema: z.ZodNumber): z.ZodType<number, string> =>
+  z.string().trim().min(1).pipe(z.coerce.number()).pipe(schema);
 const integer = (
   value: number,
   min = 1,
   max = Number.MAX_SAFE_INTEGER,
-): z.ZodDefault<z.ZodCoercedNumber> =>
-  z.coerce.number().int().min(min).max(max).default(value);
+): z.ZodDefault<z.ZodType<number, string>> =>
+  numeric(z.number().int().min(min).max(max)).default(value);
 const boolean = z
   .enum(['true', 'false'])
   .default('false')
@@ -42,7 +44,7 @@ const environmentSchema = z.object({
   GEMINI_TIMEOUT_MS: integer(8000),
   GEMINI_RETRIES: integer(1, 0, 5),
   GEMINI_MAX_OUTPUT_TOKENS: integer(300),
-  GEMINI_TEMPERATURE: z.coerce.number().min(0).max(2).default(0.4),
+  GEMINI_TEMPERATURE: numeric(z.number().min(0).max(2)).default(0.4),
   SARVAM_STT_MODEL: z.string().min(1).default('saaras:v3'),
   SARVAM_STT_LANGUAGE: z.enum(['en-IN', 'hi-IN', 'unknown']).default('en-IN'),
   SARVAM_STT_MODE: optionalText,
@@ -52,7 +54,7 @@ const environmentSchema = z.object({
   SARVAM_TTS_LANGUAGE_FIELD: z
     .enum(['language_code', 'target_language_code'])
     .optional(),
-  SARVAM_TTS_PACE: z.coerce.number().min(0.5).max(2).default(1),
+  SARVAM_TTS_PACE: numeric(z.number().min(0.5).max(2)).default(1),
   SARVAM_TTS_SAMPLE_RATE: z
     .literal(24000)
     .default(24000)
@@ -83,14 +85,14 @@ const environmentSchema = z.object({
       .regex(/^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/)
       .optional(),
   ),
-  ORDER_DROP_PCT: z.coerce.number().min(-100).max(0).optional(),
-  ASP_FLAT_PCT: z.coerce.number().nonnegative().optional(),
-  OOS_RATIO: z.coerce.number().min(1).optional(),
-  OOS_INCREASE: z.coerce.number().int().nonnegative().optional(),
-  CANCEL_INCREASE_PP: z.coerce.number().nonnegative().optional(),
-  CONCENTRATION_PCT: z.coerce.number().min(0).max(100).optional(),
-  STOCK_CANCEL_PCT: z.coerce.number().min(0).max(100).optional(),
-  DISPATCH_CANCEL_PCT: z.coerce.number().min(0).max(100).optional(),
+  ORDER_DROP_PCT: numeric(z.number().min(-100).max(0)).optional(),
+  ASP_FLAT_PCT: numeric(z.number().nonnegative()).optional(),
+  OOS_RATIO: numeric(z.number().min(1)).optional(),
+  OOS_INCREASE: numeric(z.number().int().nonnegative()).optional(),
+  CANCEL_INCREASE_PP: numeric(z.number().nonnegative()).optional(),
+  CONCENTRATION_PCT: numeric(z.number().min(0).max(100)).optional(),
+  STOCK_CANCEL_PCT: numeric(z.number().min(0).max(100)).optional(),
+  DISPATCH_CANCEL_PCT: numeric(z.number().min(0).max(100)).optional(),
 });
 
 type Environment = z.infer<typeof environmentSchema>;
