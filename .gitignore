@@ -12,3 +12,5 @@ public/vad/
 .DS_Store
 Thumbs.db
 .tmp/
+test-results/
+playwright-report/

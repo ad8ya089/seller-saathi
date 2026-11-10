@@ -1,7 +1,7 @@
-import seller from '../data/seller.json';
-import skus from '../data/skus.json';
-import cancellations from '../data/cancellations.json';
-import followup from '../data/followup_day7.json';
+import seller from '../data/seller.json' with { type: 'json' };
+import skus from '../data/skus.json' with { type: 'json' };
+import cancellations from '../data/cancellations.json' with { type: 'json' };
+import followup from '../data/followup_day7.json' with { type: 'json' };
 import {
   sellerSnapshotSchema,
   skuDataSchema,
