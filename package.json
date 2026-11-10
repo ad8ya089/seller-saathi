@@ -19,12 +19,13 @@
     "test:watch": "vitest --watch",
     "verify-data": "node --env-file-if-exists=.env --conditions=react-server --import tsx scripts/verify-data.ts",
     "smoke:sarvam": "node --env-file-if-exists=.env --conditions=react-server --import tsx scripts/smoke-sarvam.ts",
-    "smoke:gemini": "node scripts/pending.mjs smoke:gemini P3",
+    "smoke:gemini": "node --env-file-if-exists=.env --conditions=react-server --import tsx scripts/smoke-gemini.ts",
     "chat": "node scripts/pending.mjs chat P3",
     "eval": "node scripts/pending.mjs eval P5",
     "bench": "node scripts/pending.mjs bench P5"
   },
   "dependencies": {
+    "@google/genai": "3.0.0",
     "@ricky0123/vad-web": "0.0.31",
     "next": "16.4.6",
     "onnxruntime-web": "1.31.1",

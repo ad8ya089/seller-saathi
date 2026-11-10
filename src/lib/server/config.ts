@@ -51,7 +51,7 @@ const environmentSchema = z.object({
     .enum(['minimal', 'low', 'medium', 'high'])
     .default('minimal'),
   GEMINI_TIMEOUT_MS: integer(8000),
-  GEMINI_RETRIES: integer(1, 0, 5),
+  GEMINI_RETRIES: integer(1, 0, 1),
   GEMINI_MAX_OUTPUT_TOKENS: integer(300),
   GEMINI_TEMPERATURE: numeric(z.number().min(0).max(2)).default(0.4),
   SARVAM_STT_MODEL: sttModelSchema.default('saaras:v4'),
