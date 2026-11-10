@@ -8,11 +8,17 @@ import type { VoiceState } from '@/lib/client/voice-state';
 import { postEchoTurn } from '@/lib/client/sse';
 import { waitForRetry } from '@/lib/voice/abort';
 import { CALL_SETTINGS } from '@/lib/client/vad-settings';
+import {
+  confirmVoicePlan,
+  endVoiceSession,
+  openVoiceSession,
+} from '@/lib/client/session-api';
 
 interface VoiceCall extends VoiceState {
   startCall: () => Promise<void>;
   endCall: () => void;
   sendText: (text: string) => Promise<boolean>;
+  confirmPlan: (decision: 'accept' | 'decline') => Promise<void>;
 }
 
 export function useVoiceCall(): VoiceCall {
@@ -25,6 +31,9 @@ export function useVoiceCall(): VoiceCall {
         createId: (): string => crypto.randomUUID(),
         now: (): number => performance.now(),
         send: postEchoTurn,
+        openSession: openVoiceSession,
+        endSession: endVoiceSession,
+        confirmPlan: confirmVoicePlan,
         cooldown: (signal): Promise<void> =>
           waitForRetry(CALL_SETTINGS.echoTailMs, signal),
       },
@@ -51,5 +60,7 @@ export function useVoiceCall(): VoiceCall {
       await active.sendText(text);
       return active.snapshot().error === null;
     },
+    confirmPlan: (decision): Promise<void> =>
+      controller().confirmPlan(decision),
   };
 }

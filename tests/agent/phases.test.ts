@@ -10,7 +10,9 @@ describe('server phase authority', () => {
     session.phase = 'intake';
     session.lastUserText = 'Hello there.';
     expect(phaseDeclarations(session)).toEqual([]);
-    expect(() => transition(session, 'findings')).toThrow();
+    expect(() => {
+      transition(session, 'findings');
+    }).toThrow();
     session.lastUserText = 'My sales have dropped this month.';
     expect(phaseDeclarations(session).map((tool) => tool.name)).toEqual([
       'get_seller_snapshot',
@@ -104,7 +106,7 @@ describe('server phase authority', () => {
       kind: 'model',
       content: [signed],
     });
-    expect(draft.facts.oos_confirmed?.value).toBe('yes');
+    expect(draft.facts.oos_confirmed.value).toBe('yes');
     expect(session.facts.oos_confirmed).toBeUndefined();
     expect(
       draft.history[0]?.messages[1]?.kind === 'model' &&

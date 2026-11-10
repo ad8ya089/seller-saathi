@@ -1,6 +1,7 @@
 import type { EchoEvent, EchoTimings } from '@/lib/voice/events';
 import type { EchoSubmission } from '@/lib/client/sse';
 import type { AudioQueue } from '@/lib/client/audio-queue';
+import type { AgentState, SessionResponse } from '@/lib/agent/contracts';
 
 export type VoicePhase = 'idle' | 'listening' | 'processing' | 'speaking';
 export interface TranscriptMessage {
@@ -21,6 +22,10 @@ export interface VoiceState {
   phase: VoicePhase;
   textFallback: boolean;
   error: string | null;
+  notice: string | null;
+  agent: AgentState | null;
+  maxQuestions: number | null;
+  tools: string[];
   messages: TranscriptMessage[];
   firstAudioMs: number | null;
   serverTimings: EchoTimings | null;
@@ -33,6 +38,10 @@ export function initialVoiceState(): VoiceState {
     phase: 'idle',
     textFallback: false,
     error: null,
+    notice: null,
+    agent: null,
+    maxQuestions: null,
+    tools: [],
     messages: [],
     firstAudioMs: null,
     serverTimings: null,
@@ -55,6 +64,7 @@ export interface AudioResources {
   resume: () => Promise<void>;
   suspend: () => Promise<void>;
   close: () => Promise<void>;
+  speakFallback: (text: string, signal: AbortSignal) => Promise<void>;
   openMicrophone: (
     callbacks: MicrophoneCallbacks,
     signal: AbortSignal,
@@ -64,6 +74,14 @@ export interface VoiceDependencies {
   createAudio: () => AudioResources;
   createId: () => string;
   now: () => number;
+  openSession: (signal: AbortSignal) => Promise<SessionResponse>;
+  endSession: (sessionId: string) => Promise<void>;
+  confirmPlan: (
+    sessionId: string,
+    planId: string,
+    decision: 'accept' | 'decline',
+    signal: AbortSignal,
+  ) => Promise<AgentState>;
   send: (
     input: EchoSubmission,
     onEvent: (event: EchoEvent) => Promise<void>,

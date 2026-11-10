@@ -31,18 +31,28 @@ function rig(): {
     destroy: vi.fn<MicrophoneHandle['destroy']>().mockResolvedValue(undefined),
   };
   const audio: AudioResources = {
-    createQueue: (): AudioQueue =>
-      new AudioQueue({
+    speakFallback: vi
+      .fn<AudioResources['speakFallback']>()
+      .mockResolvedValue(undefined),
+    createQueue: (): AudioQueue => {
+      let greeting = true;
+      return new AudioQueue({
         now: (): number => 0,
         decode: (): Promise<DecodedClip> =>
           Promise.resolve({
             duration: 0.1,
             play: (_when, done): { stop: () => void } => {
+              if (greeting) {
+                greeting = false;
+                queueMicrotask(done);
+                return { stop: vi.fn<() => void>() };
+              }
               ended.push(done);
               return { stop: vi.fn<() => void>() };
             },
           }),
-      }),
+      });
+    },
     resume: vi.fn<AudioResources['resume']>().mockResolvedValue(undefined),
     suspend: vi.fn<AudioResources['suspend']>().mockResolvedValue(undefined),
     close: vi.fn<AudioResources['close']>().mockResolvedValue(undefined),
@@ -57,6 +67,26 @@ function rig(): {
       .mockReturnValue(audio),
     createId: (): string => 'call-test',
     now: (): number => 1000,
+    openSession: vi.fn<VoiceDependencies['openSession']>().mockResolvedValue({
+      sessionId: '11111111-1111-4111-8111-111111111111',
+      greeting: {
+        text: 'Hello, I am an AI assistant.',
+        audioB64: wav,
+        mime: 'audio/wav',
+      },
+      snapshot: {},
+      config: { maxUtteranceMs: 28000, maxQuestions: 3, bargeIn: false },
+    }),
+    endSession: vi
+      .fn<VoiceDependencies['endSession']>()
+      .mockResolvedValue(undefined),
+    confirmPlan: vi.fn<VoiceDependencies['confirmPlan']>().mockResolvedValue({
+      phase: 'done',
+      questionsAsked: 2,
+      hypotheses: [],
+      facts: [],
+      committed: true,
+    }),
     cooldown: (): Promise<void> => Promise.resolve(),
     send: vi.fn<VoiceDependencies['send']>().mockResolvedValue(undefined),
   };
@@ -87,6 +117,139 @@ const echoEvents: EchoEvent[] = [
 ];
 
 describe('voice call lifecycle', () => {
+  it('waits for the server greeting to finish before opening the microphone', async () => {
+    const { controller, audio, deps } = rig();
+    const open = vi.fn<AudioResources['openMicrophone']>(audio.openMicrophone);
+    audio.openMicrophone = open;
+    let finish: (() => void) | undefined;
+    audio.createQueue = (): AudioQueue =>
+      new AudioQueue({
+        now: (): number => 0,
+        decode: (): Promise<DecodedClip> =>
+          Promise.resolve({
+            duration: 1,
+            play: (_when, done): { stop: () => void } => {
+              finish = done;
+              return { stop: (): void => undefined };
+            },
+          }),
+      });
+    const starting = controller.startCall();
+    await vi.waitFor(() => {
+      expect(finish).toBeDefined();
+    });
+    expect(open).not.toHaveBeenCalled();
+    expect(controller.snapshot().phase).toBe('speaking');
+    finish?.();
+    await starting;
+    expect(open).toHaveBeenCalledOnce();
+    expect(deps.openSession).toHaveBeenCalledOnce();
+    await controller.dispose();
+    expect(deps.endSession).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+    );
+  });
+  it('closes a server session that arrives after End Call', async () => {
+    const { controller, deps, audio } = rig();
+    const response = await deps.openSession(new AbortController().signal);
+    let release: (value: typeof response) => void = () => undefined;
+    deps.openSession = vi
+      .fn<VoiceDependencies['openSession']>()
+      .mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            release = resolve;
+          }),
+      );
+    const open = vi.fn<AudioResources['openMicrophone']>(audio.openMicrophone);
+    audio.openMicrophone = open;
+    const starting = controller.startCall();
+    await vi.waitFor(() => {
+      expect(deps.openSession).toHaveBeenCalledOnce();
+    });
+    controller.endCall();
+    release(response);
+    await starting;
+    expect(open).not.toHaveBeenCalled();
+    expect(deps.endSession).toHaveBeenCalledWith(response.sessionId);
+    expect(controller.snapshot().phase).toBe('idle');
+    await controller.dispose();
+  });
+  it('displays agent/tool state and reads a failed TTS sentence through the browser fallback', async () => {
+    const { controller, deps, audio, capture } = rig();
+    deps.send = async (_input, onEvent): Promise<void> => {
+      await onEvent({
+        event: 'transcript',
+        data: { text: 'Sales fell', sttMs: 0 },
+      });
+      await onEvent({
+        event: 'tool',
+        data: { name: 'get_seller_snapshot', label: 'Checking your numbers.' },
+      });
+      await onEvent({
+        event: 'state',
+        data: {
+          phase: 'investigate',
+          questionsAsked: 1,
+          hypotheses: [],
+          facts: [],
+          committed: false,
+        },
+      });
+      await onEvent({
+        event: 'sentence',
+        data: { idx: 0, text: 'Let us check stock.' },
+      });
+      await onEvent({
+        event: 'fallback',
+        data: { kind: 'tts', message: 'Using browser voice.' },
+      });
+      await onEvent({
+        event: 'done',
+        data: {
+          timings: { sttMs: 0, llmFirstMs: 2, ttsFirstMs: 0, totalMs: 3 },
+          turn: 1,
+        },
+      });
+    };
+    await controller.startCall();
+    await controller.sendText('Sales fell');
+    expect(audio.speakFallback).toHaveBeenCalledOnce();
+    expect(controller.snapshot().agent?.questionsAsked).toBe(1);
+    expect(controller.snapshot().tools).toContain('Checking your numbers.');
+    expect(controller.snapshot().notice).toBe('Using browser voice.');
+    expect(controller.snapshot().error).toBeNull();
+    expect(capture.start).toHaveBeenCalledOnce();
+    await controller.dispose();
+  });
+  it('finishes queued summary audio before ending a completed server conversation', async () => {
+    const { controller, deps, capture, ended } = rig();
+    deps.send = async (_input, onEvent): Promise<void> => {
+      for (const event of echoEvents) await onEvent(event);
+      await onEvent({
+        event: 'state',
+        data: {
+          phase: 'done',
+          questionsAsked: 2,
+          hypotheses: [],
+          facts: [],
+          committed: true,
+        },
+      });
+    };
+    await controller.startCall();
+    const sending = controller.sendText('Yes, save it.');
+    await vi.waitFor(() => {
+      expect(ended).toHaveLength(1);
+    });
+    expect(controller.snapshot().active).toBe(true);
+    ended[0]?.();
+    await sending;
+    expect(controller.snapshot().active).toBe(false);
+    expect(controller.snapshot().agent?.committed).toBe(true);
+    expect(capture.destroy).toHaveBeenCalledOnce();
+    await controller.dispose();
+  });
   it('does not create an AudioContext before a user starts a call', async () => {
     const { controller, deps, audio } = rig();
     expect(deps.createAudio).not.toHaveBeenCalled();
@@ -124,7 +287,11 @@ describe('voice call lifecycle', () => {
     expect(capture.start).toHaveBeenCalledOnce();
     expect(
       controller.snapshot().messages.map((message) => message.text),
-    ).toEqual(['Hello stock', 'You said: Hello stock']);
+    ).toEqual([
+      'Hello, I am an AI assistant.',
+      'Hello stock',
+      'You said: Hello stock',
+    ]);
     await controller.dispose();
   });
   it('keeps text fallback active when microphone permission is denied', async () => {
@@ -158,12 +325,18 @@ describe('voice call lifecycle', () => {
   it('cleans up when End Call happens while microphone initialization is pending', async () => {
     const { controller, audio, capture } = rig();
     let release: (value: MicrophoneHandle) => void = () => undefined;
-    audio.openMicrophone = (): Promise<MicrophoneHandle> =>
-      new Promise((resolve) => {
-        release = resolve;
-      });
+    audio.openMicrophone = vi
+      .fn<AudioResources['openMicrophone']>()
+      .mockImplementation(
+        (): Promise<MicrophoneHandle> =>
+          new Promise((resolve) => {
+            release = resolve;
+          }),
+      );
     const start = controller.startCall();
-    await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(audio.openMicrophone).toHaveBeenCalledOnce();
+    });
     controller.endCall();
     release(capture);
     await start;
@@ -189,13 +362,16 @@ describe('voice call lifecycle', () => {
     };
     await controller.startCall();
     const turn = controller.sendText('Hello');
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(turnSignal).toBeDefined();
+    });
     controller.endCall();
     release();
     await turn;
     expect(turnSignal?.aborted).toBe(true);
-    expect(controller.snapshot().messages).toEqual([]);
+    expect(
+      controller.snapshot().messages.map((message) => message.text),
+    ).toEqual(['Hello, I am an AI assistant.']);
     expect(controller.snapshot().phase).toBe('idle');
     await controller.dispose();
   });

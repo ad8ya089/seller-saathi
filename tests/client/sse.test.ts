@@ -56,6 +56,53 @@ describe('incremental SSE parser', () => {
 });
 
 describe('POST SSE transport', () => {
+  it('accepts state/activity and explicit TTS fallback without accepting arbitrary skipped audio indexes', async () => {
+    const source =
+      transcript +
+      frame('tool', {
+        name: 'get_seller_snapshot',
+        label: 'Checking your numbers.',
+      }) +
+      frame('state', {
+        phase: 'investigate',
+        questionsAsked: 1,
+        hypotheses: [],
+        facts: [],
+      }) +
+      sentence +
+      frame('fallback', { kind: 'tts', message: 'Use browser voice.' }) +
+      done;
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(source, {
+        headers: { 'Content-Type': 'text/event-stream' },
+      }),
+    );
+    const seen: string[] = [];
+    await postEchoTurn(
+      {
+        kind: 'text',
+        sessionId: 'call',
+        text: 'hello',
+        turnId: '11111111-1111-4111-8111-111111111111',
+      },
+      (event): void => {
+        seen.push(event.event);
+      },
+      new AbortController().signal,
+      fetcher,
+    );
+    expect(seen).toEqual([
+      'transcript',
+      'tool',
+      'state',
+      'sentence',
+      'fallback',
+      'done',
+    ]);
+    expect(fetcher.mock.calls[0]?.[1]?.body).toContain(
+      '11111111-1111-4111-8111-111111111111',
+    );
+  });
   it('uses POST, preserves UTF-8 across byte chunks and dispatches events incrementally', async () => {
     const bytes = new TextEncoder().encode(
       transcript + sentence + audio + done,

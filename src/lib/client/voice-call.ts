@@ -12,6 +12,7 @@ import type {
 } from '@/lib/client/voice-state';
 import type { AudioQueue } from '@/lib/client/audio-queue';
 import { CALL_SETTINGS } from '@/lib/client/vad-settings';
+import { TurnPlayback } from '@/lib/client/turn-playback';
 
 interface Call {
   id: string;
@@ -21,6 +22,9 @@ interface Call {
   busy: boolean;
   turn: number;
   lastSpeechAt: number | null;
+  ready: boolean;
+  captureMs: number;
+  opening?: Promise<void>;
   captureTimer?: ReturnType<typeof setTimeout>;
 }
 export class VoiceCallController {
@@ -72,6 +76,8 @@ export class VoiceCallController {
       busy: false,
       turn: 0,
       lastSpeechAt: null,
+      ready: false,
+      captureMs: CALL_SETTINGS.maxCaptureMs,
     };
     this.call = call;
     this.patch({
@@ -83,6 +89,52 @@ export class VoiceCallController {
     return call;
   }
 
+  private async prepareSession(call: Call): Promise<void> {
+    if (call.ready) return;
+    if (!call.opening) {
+      const initialize = async (): Promise<void> => {
+        this.patch({ initializing: true, phase: 'processing' });
+        const session = await this.dependencies.openSession(call.abort.signal);
+        if (!this.current(call)) {
+          void this.dependencies
+            .endSession(session.sessionId)
+            .catch(() => undefined);
+          return;
+        }
+        call.id = session.sessionId;
+        call.ready = true;
+        call.captureMs = Math.max(
+          1,
+          Math.min(
+            CALL_SETTINGS.maxCaptureMs,
+            session.config.maxUtteranceMs - CALL_SETTINGS.capturePaddingMs,
+          ),
+        );
+        this.patch({
+          phase: 'speaking',
+          maxQuestions: session.config.maxQuestions,
+          messages: [
+            {
+              id: `${call.id}-greeting`,
+              role: 'assistant',
+              text: session.greeting.text,
+            },
+          ],
+        });
+        await call.queue.enqueue(session.greeting.audioB64);
+        await call.queue.whenIdle();
+        if (this.current(call))
+          this.patch({ phase: 'listening', initializing: false });
+      };
+      call.opening = this.track(initialize());
+    }
+    try {
+      await call.opening;
+    } finally {
+      delete call.opening;
+    }
+  }
+
   async startCall(): Promise<void> {
     if (this.disposed || this.call) return;
     let call: Call | undefined;
@@ -91,6 +143,10 @@ export class VoiceCallController {
       this.patch({ initializing: true });
       const resume = this.audio?.resume();
       await resume;
+      if (!this.current(call)) return;
+      await this.prepareSession(call);
+      if (!this.current(call)) return;
+      await this.dependencies.cooldown(call.abort.signal);
       if (!this.current(call)) return;
       await this.track(this.attachMicrophone(call));
     } catch (error: unknown) {
@@ -119,7 +175,7 @@ export class VoiceCallController {
           this.clearCaptureTimer(call);
           call.captureTimer = setTimeout(() => {
             void this.captureLimit(call);
-          }, CALL_SETTINGS.maxCaptureMs);
+          }, call.captureMs);
         },
         onMisfire: (): void => {
           this.clearCaptureTimer(call);
@@ -173,16 +229,22 @@ export class VoiceCallController {
       call = this.call ?? this.newCall(true);
       const resume = this.audio?.resume();
       await resume;
+      if (!this.current(call)) return;
+      await this.prepareSession(call);
       await this.submit(
         call,
         { kind: 'text', sessionId: call.id, text: parsed.data },
         'text',
         this.dependencies.now(),
       );
-    } catch {
+    } catch (error: unknown) {
       if (call && !this.current(call)) return;
       this.patch({
-        error: 'Audio could not start. Please restart the call.',
+        initializing: false,
+        error:
+          error instanceof AppError
+            ? error.message
+            : 'Audio could not start. Please restart the call.',
         textFallback: true,
       });
     }
@@ -192,7 +254,7 @@ export class VoiceCallController {
     endedAt = this.dependencies.now(),
   ): Promise<void> {
     const call = this.call;
-    if (!call || call.busy || !this.current(call)) return;
+    if (!call || !call.ready || call.busy || !this.current(call)) return;
     this.clearCaptureTimer(call);
     try {
       const wav = encodeMicrophoneWav(samples);
@@ -224,75 +286,35 @@ export class VoiceCallController {
     call.turn += 1;
     this.clearCaptureTimer(call);
     const turn = call.turn;
-    const assistantId = `${call.id}-${String(turn)}-assistant`;
     this.patch({
       phase: 'processing',
       error: null,
+      notice: null,
       firstAudioMs: null,
       serverTimings: null,
     });
-    let firstAudioMs: number | null = null;
+    const audio = this.audio;
+    if (!audio) return;
+    const playback = new TurnPlayback({
+      current: (): boolean => this.current(call),
+      snapshot: (): VoiceState => this.state,
+      patch: (update): void => {
+        this.patch(update);
+      },
+      queue: call.queue,
+      speakFallback: audio.speakFallback,
+      signal: call.abort.signal,
+      now: this.dependencies.now,
+      endedAt,
+      prefix: `${call.id}-${String(turn)}`,
+    });
     let failed = false;
     try {
       await call.capture?.pause();
       if (!this.current(call)) return;
       await this.dependencies.send(
-        input,
-        async (event): Promise<void> => {
-          if (!this.current(call)) return;
-          if (event.event === 'transcript')
-            this.patch({
-              messages: [
-                ...this.state.messages,
-                {
-                  id: `${call.id}-${String(turn)}-seller`,
-                  role: 'seller',
-                  text: event.data.text,
-                },
-              ],
-            });
-          else if (event.event === 'sentence') {
-            const existing = this.state.messages.find(
-              (message) => message.id === assistantId,
-            );
-            this.patch({
-              messages: existing
-                ? this.state.messages.map((message) =>
-                    message.id === assistantId
-                      ? {
-                          ...message,
-                          text: `${message.text} ${event.data.text}`,
-                        }
-                      : message,
-                  )
-                : [
-                    ...this.state.messages,
-                    {
-                      id: assistantId,
-                      role: 'assistant',
-                      text: event.data.text,
-                    },
-                  ],
-            });
-          } else if (event.event === 'audio') {
-            this.patch({ phase: 'speaking' });
-            await call.queue.enqueue(
-              event.data.b64,
-              event.data.idx === 0
-                ? (): void => {
-                    if (this.current(call)) {
-                      firstAudioMs = Math.max(
-                        0,
-                        this.dependencies.now() - endedAt,
-                      );
-                      this.patch({ firstAudioMs });
-                    }
-                  }
-                : undefined,
-            );
-          } else if (event.event === 'done')
-            this.patch({ serverTimings: event.data.timings });
-        },
+        { ...input, turnId: this.dependencies.createId() },
+        (event): Promise<void> => playback.onEvent(event),
         call.abort.signal,
       );
       await call.queue.whenIdle();
@@ -314,15 +336,67 @@ export class VoiceCallController {
             {
               turn,
               source,
-              firstAudioMs,
+              firstAudioMs: playback.firstAudioMs,
               server: this.state.serverTimings,
               failed,
             },
           ].slice(-10),
         });
+        if (this.state.agent?.phase === 'done') {
+          this.endCall();
+        }
+        if (this.current(call))
+          try {
+            await this.dependencies.cooldown(call.abort.signal);
+            if (this.current(call)) await call.capture?.start();
+          } catch {
+            if (this.current(call))
+              this.patch({
+                textFallback: true,
+                error: 'Microphone paused. You can still type a message.',
+              });
+          }
+        if (this.current(call)) {
+          call.busy = false;
+          call.lastSpeechAt = null;
+          this.patch({ phase: 'listening' });
+        }
+      }
+    }
+  }
+
+  async confirmPlan(decision: 'accept' | 'decline'): Promise<void> {
+    const call = this.call;
+    const plan = this.state.agent?.plan;
+    if (!call || call.busy || !plan || !this.current(call)) return;
+    call.busy = true;
+    this.patch({ phase: 'processing', error: null });
+    try {
+      await call.capture?.pause();
+      const state = await this.dependencies.confirmPlan(
+        call.id,
+        plan.id,
+        decision,
+        call.abort.signal,
+      );
+      if (!this.current(call)) return;
+      this.patch({ agent: state });
+      if (state.phase === 'done') {
+        this.endCall();
+        return;
+      }
+    } catch (error: unknown) {
+      if (this.current(call))
+        this.patch({
+          error:
+            error instanceof AppError
+              ? error.message
+              : 'The plan could not be confirmed. Please try again.',
+        });
+    } finally {
+      if (this.current(call)) {
         try {
-          await this.dependencies.cooldown(call.abort.signal);
-          if (this.current(call)) await call.capture?.start();
+          await call.capture?.start();
         } catch {
           if (this.current(call))
             this.patch({
@@ -330,11 +404,8 @@ export class VoiceCallController {
               error: 'Microphone paused. You can still type a message.',
             });
         }
-        if (this.current(call)) {
-          call.busy = false;
-          call.lastSpeechAt = null;
-          this.patch({ phase: 'listening' });
-        }
+        call.busy = false;
+        this.patch({ phase: 'listening' });
       }
     }
   }
@@ -346,6 +417,8 @@ export class VoiceCallController {
       this.clearCaptureTimer(call);
       call.abort.abort();
       call.queue.stopAll();
+      if (call.ready)
+        void this.dependencies.endSession(call.id).catch(() => undefined);
       if (call.capture)
         void this.track(call.capture.destroy()).catch(() => undefined);
     }

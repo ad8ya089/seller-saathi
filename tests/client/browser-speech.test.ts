@@ -1,0 +1,46 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { speakBrowserFallback } from '@/lib/client/browser-speech';
+
+class Utterance {
+  lang = '';
+  onend: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  constructor(readonly text: string) {}
+}
+afterEach(() => vi.unstubAllGlobals());
+
+describe('browser voice fallback', () => {
+  it('speaks English-India and resolves only after playback ends', async () => {
+    const speak = vi.fn<(utterance: Utterance) => void>();
+    vi.stubGlobal('SpeechSynthesisUtterance', Utterance);
+    vi.stubGlobal('speechSynthesis', { speak, cancel: vi.fn() });
+    const completed = vi.fn();
+    const running = speakBrowserFallback(
+      'Understood.',
+      new AbortController().signal,
+    ).then(completed);
+    const utterance = speak.mock.calls[0]?.[0];
+    expect(utterance?.lang).toBe('en-IN');
+    expect(utterance?.text).toBe('Understood.');
+    expect(completed).not.toHaveBeenCalled();
+    utterance?.onend?.();
+    await running;
+    expect(completed).toHaveBeenCalledOnce();
+  });
+  it('keeps cancellation typed even when browser cancel synchronously fires an error', async () => {
+    let utterance: Utterance | undefined;
+    vi.stubGlobal('SpeechSynthesisUtterance', Utterance);
+    const cancel = vi.fn(() => utterance?.onerror?.());
+    vi.stubGlobal('speechSynthesis', {
+      speak: (value: Utterance): void => {
+        utterance = value;
+      },
+      cancel,
+    });
+    const abort = new AbortController();
+    const running = speakBrowserFallback('Understood.', abort.signal);
+    abort.abort();
+    await expect(running).rejects.toMatchObject({ code: 'REQUEST_ABORTED' });
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+});

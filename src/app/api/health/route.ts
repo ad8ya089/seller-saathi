@@ -1,6 +1,7 @@
 import appPackage from '../../../../package.json';
 import { getConfig } from '@/lib/server/config';
 import { healthResponseSchema, notFoundSchema } from '@/lib/server/health';
+import { currentSessionCount } from '@/lib/server/session-registry';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,8 +15,10 @@ export function GET(request: Request): Response {
     });
   let ok = true;
   let providers = { gemini: false, sarvam: false };
+  let sessions = 0;
   try {
     providers = getConfig().providers;
+    sessions = currentSessionCount();
   } catch {
     ok = false;
   }
@@ -24,7 +27,7 @@ export function GET(request: Request): Response {
     version: appPackage.version,
     uptimeS: Math.floor(process.uptime()),
     providers,
-    sessions: 0,
+    sessions,
   });
   return Response.json(body, { status: ok ? 200 : 503, headers });
 }

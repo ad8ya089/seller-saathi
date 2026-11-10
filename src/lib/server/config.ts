@@ -71,9 +71,9 @@ const environmentSchema = z.object({
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
   LOG_TRANSCRIPTS: boolean,
-  SESSION_TTL_MS: integer(1_800_000),
-  SESSION_MAX_TURNS: integer(25),
-  SESSION_MAX_MS: integer(600_000),
+  SESSION_TTL_MS: integer(1_800_000, 1, 1_800_000),
+  SESSION_MAX_TURNS: integer(25, 1, 25),
+  SESSION_MAX_MS: integer(600_000, 1, 600_000),
   RATE_LIMIT_TURNS: integer(40),
   RATE_LIMIT_WINDOW_MS: integer(600_000),
   DAILY_TURN_CAP: integer(800),

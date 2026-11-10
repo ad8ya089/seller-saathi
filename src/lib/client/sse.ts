@@ -10,11 +10,11 @@ import { SseParser } from '@/lib/client/sse-parser';
 export { SseParser } from '@/lib/client/sse-parser';
 
 export type EchoSubmission =
-  | { kind: 'text'; sessionId: string; text: string }
-  | { kind: 'audio'; sessionId: string; wav: ArrayBuffer };
+  | { kind: 'text'; sessionId: string; text: string; turnId?: string }
+  | { kind: 'audio'; sessionId: string; wav: ArrayBuffer; turnId?: string };
 type EventHandler = (event: EchoEvent) => void | Promise<void>;
 
-async function httpError(response: Response): Promise<AppError> {
+export async function httpError(response: Response): Promise<AppError> {
   try {
     const body: unknown = await response.json();
     const parsed = publicErrorSchema.safeParse(body);
@@ -47,6 +47,7 @@ export async function postEchoTurn(
     const value = textTurnSchema.safeParse({
       sessionId: input.sessionId,
       text: input.text,
+      ...(input.turnId ? { turnId: input.turnId } : {}),
     });
     if (!value.success)
       throw new AppError('INVALID_INPUT', 'Please enter a short message');
@@ -57,6 +58,7 @@ export async function postEchoTurn(
       throw new AppError('INVALID_INPUT', 'Start a new call before recording');
     const form = new FormData();
     form.set('sessionId', input.sessionId);
+    if (input.turnId) form.set('turnId', input.turnId);
     form.set(
       'audio',
       new Blob([input.wav], { type: 'audio/wav' }),
@@ -97,6 +99,11 @@ export async function postEchoTurn(
   let sentences = 0;
   let audios = 0;
   const dispatch = async (event: EchoEvent): Promise<boolean> => {
+    if (terminal)
+      throw new AppError(
+        'STREAM_INVALID',
+        'The voice stream continued after completion',
+      );
     if (event.event === 'transcript') {
       if (transcriptSeen)
         throw new AppError(
@@ -116,6 +123,13 @@ export async function postEchoTurn(
         throw new AppError(
           'STREAM_INVALID',
           'Voice audio arrived out of order',
+        );
+      audios += 1;
+    } else if (event.event === 'fallback' && event.data.kind === 'tts') {
+      if (!transcriptSeen || audios >= sentences)
+        throw new AppError(
+          'STREAM_INVALID',
+          'Voice fallback arrived without a sentence',
         );
       audios += 1;
     } else if (event.event === 'done') {

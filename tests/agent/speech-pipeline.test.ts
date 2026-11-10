@@ -8,7 +8,7 @@ describe('bounded ordered agent speech', () => {
   it('starts at most two requests and publishes in sentence order after reverse completion', async () => {
     const releases: (() => void)[] = [];
     const tts = new FakeTts(wavFixture({ sampleRate: 24000 }), {
-      before: () =>
+      before: (): Promise<void> =>
         new Promise<void>((resolve) => {
           releases.push(resolve);
         }),
@@ -42,7 +42,7 @@ describe('bounded ordered agent speech', () => {
   it('settles cancellation while synthesis is pending without publishing late audio', async () => {
     const abort = new AbortController();
     const tts = new FakeTts(wavFixture({ sampleRate: 24000 }), {
-      before: () => new Promise(() => undefined),
+      before: (): Promise<void> => new Promise(() => undefined),
     });
     const emit = vi.fn();
     const pipeline = new SpeechPipeline(tts, emit, abort.signal, 0);

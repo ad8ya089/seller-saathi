@@ -2,6 +2,7 @@ import { AppError } from '@/lib/errors';
 import { AudioQueue } from '@/lib/client/audio-queue';
 import type { DecodedClip } from '@/lib/client/audio-queue';
 import { openBrowserMicrophone } from '@/lib/client/browser-microphone';
+import { speakBrowserFallback } from '@/lib/client/browser-speech';
 import type {
   AudioResources,
   MicrophoneHandle,
@@ -15,6 +16,7 @@ export function createBrowserAudio(): AudioResources {
     );
   const context = new AudioContext();
   return {
+    speakFallback: speakBrowserFallback,
     createQueue: (): AudioQueue =>
       new AudioQueue({
         now: (): number => context.currentTime,

@@ -6,7 +6,7 @@ export const healthResponseSchema = z.strictObject({
   version: z.string().min(1),
   uptimeS: z.number().nonnegative(),
   providers: z.strictObject({ gemini: z.boolean(), sarvam: z.boolean() }),
-  sessions: z.literal(0),
+  sessions: z.number().int().nonnegative(),
 });
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
 export const notFoundSchema = z.strictObject({ error: z.literal('NOT_FOUND') });

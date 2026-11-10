@@ -31,7 +31,7 @@ export function VoiceDebug({ state }: { state: VoiceState }): ReactNode {
       className="rounded-2xl border border-stone-300 bg-stone-950 p-5 text-sm text-stone-100"
     >
       <h2 className="font-semibold">Voice timing</h2>
-      <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div>
           <dt className="text-stone-400">First audio</dt>
           <dd>{milliseconds(state.firstAudioMs)}</dd>
@@ -39,6 +39,10 @@ export function VoiceDebug({ state }: { state: VoiceState }): ReactNode {
         <div>
           <dt className="text-stone-400">STT</dt>
           <dd>{milliseconds(state.serverTimings?.sttMs)}</dd>
+        </div>
+        <div>
+          <dt className="text-stone-400">First LLM text</dt>
+          <dd>{milliseconds(state.serverTimings?.llmFirstMs)}</dd>
         </div>
         <div>
           <dt className="text-stone-400">First TTS</dt>

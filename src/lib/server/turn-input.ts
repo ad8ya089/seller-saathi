@@ -8,8 +8,8 @@ import { validateWav } from '@/lib/voice/wav';
 import { assertSameOrigin } from '@/lib/server/same-origin';
 
 export type EchoInput =
-  | { kind: 'text'; sessionId: string; text: string }
-  | { kind: 'audio'; sessionId: string; wav: Buffer };
+  | { kind: 'text'; sessionId: string; text: string; turnId?: string }
+  | { kind: 'audio'; sessionId: string; wav: Buffer; turnId?: string };
 export interface UploadLimits {
   maxBytes: number;
   maxDurationMs: number;
@@ -17,6 +17,7 @@ export interface UploadLimits {
 const audioFormSchema = z.strictObject({
   sessionId: sessionIdSchema,
   audio: z.instanceof(Blob),
+  turnId: z.uuid().optional(),
 });
 
 async function limitedBody(
@@ -72,7 +73,12 @@ export async function parseEchoInput(
     const parsed = textTurnSchema.safeParse(value);
     if (!parsed.success)
       throw new AppError('INVALID_INPUT', 'Text request fields are invalid');
-    return { kind: 'text', ...parsed.data };
+    return {
+      kind: 'text',
+      sessionId: parsed.data.sessionId,
+      text: parsed.data.text,
+      ...(parsed.data.turnId ? { turnId: parsed.data.turnId } : {}),
+    };
   }
   if (!contentType.toLowerCase().startsWith('multipart/form-data;'))
     throw new AppError('INVALID_INPUT', 'Use JSON text or multipart WAV input');
@@ -91,9 +97,10 @@ export async function parseEchoInput(
     throw new AppError('INVALID_INPUT', 'Multipart input is invalid');
   }
   if (
-    [...form.keys()].length !== 2 ||
+    [...form.keys()].length !== (form.has('turnId') ? 3 : 2) ||
     form.getAll('sessionId').length !== 1 ||
-    form.getAll('audio').length !== 1
+    form.getAll('audio').length !== 1 ||
+    (form.has('turnId') && form.getAll('turnId').length !== 1)
   )
     throw new AppError(
       'INVALID_INPUT',
@@ -102,6 +109,7 @@ export async function parseEchoInput(
   const parsed = audioFormSchema.safeParse({
     sessionId: form.get('sessionId'),
     audio: form.get('audio'),
+    ...(form.has('turnId') ? { turnId: form.get('turnId') } : {}),
   });
   if (!parsed.success)
     throw new AppError('INVALID_INPUT', 'Audio request fields are invalid');
@@ -112,5 +120,30 @@ export async function parseEchoInput(
     maxBytes: limits.maxBytes,
     maxDurationMs: limits.maxDurationMs,
   });
-  return { kind: 'audio', sessionId: parsed.data.sessionId, wav };
+  return {
+    kind: 'audio',
+    sessionId: parsed.data.sessionId,
+    wav,
+    ...(parsed.data.turnId ? { turnId: parsed.data.turnId } : {}),
+  };
+}
+
+export async function readJsonInput(
+  request: Request,
+  maxBytes = 4096,
+): Promise<unknown> {
+  if (
+    request.headers.get('Content-Type')?.split(';')[0]?.trim().toLowerCase() !==
+    'application/json'
+  )
+    throw new AppError('INVALID_INPUT', 'Send a JSON request');
+  const bytes = await limitedBody(request, maxBytes);
+  try {
+    const value: unknown = JSON.parse(
+      new TextDecoder('utf-8', { fatal: true }).decode(bytes),
+    );
+    return value;
+  } catch {
+    throw new AppError('INVALID_INPUT', 'Request JSON is invalid');
+  }
 }
