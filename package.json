@@ -20,7 +20,7 @@
     "verify-data": "node --env-file-if-exists=.env --conditions=react-server --import tsx scripts/verify-data.ts",
     "smoke:sarvam": "node --env-file-if-exists=.env --conditions=react-server --import tsx scripts/smoke-sarvam.ts",
     "smoke:gemini": "node --env-file-if-exists=.env --conditions=react-server --import tsx scripts/smoke-gemini.ts",
-    "chat": "node scripts/pending.mjs chat P3",
+    "chat": "node --env-file-if-exists=.env --conditions=react-server --import tsx scripts/chat-cli.ts",
     "eval": "node scripts/pending.mjs eval P5",
     "bench": "node scripts/pending.mjs bench P5"
   },
