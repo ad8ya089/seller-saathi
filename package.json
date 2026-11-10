@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "npm run verify-data && next build",
-    "start": "next start",
+    "start": "node --env-file-if-exists=.env scripts/start.mjs",
     "lint": "eslint . --max-warnings 0 && prettier --check .",
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
