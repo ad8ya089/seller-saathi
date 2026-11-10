@@ -1,0 +1,13 @@
+{
+  "synthetic": true,
+  "model": "bulbul:v4-flash",
+  "speaker": "shubh_enhi_ads",
+  "created": "2026-11-10T21:38:31.454Z",
+  "sampleRate": 16000,
+  "fixtures": [
+    {
+      "file": "seller-01.wav",
+      "text": "My sales dropped this month. Can you help me understand what is happening?"
+    }
+  ]
+}
