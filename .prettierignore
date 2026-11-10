@@ -4,6 +4,7 @@ next-env.d.ts
 package-lock.json
 coverage
 .data
+public/vad
 AGENTS.md
 prompt.md
 docs/0*.md

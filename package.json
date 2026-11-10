@@ -8,6 +8,7 @@
     "npm": ">=10"
   },
   "scripts": {
+    "postinstall": "node scripts/copy-vad-assets.mjs",
     "dev": "next dev",
     "build": "npm run verify-data && next build",
     "start": "node --env-file-if-exists=.env scripts/start.mjs",
@@ -17,14 +18,16 @@
     "test": "vitest run",
     "test:watch": "vitest --watch",
     "verify-data": "node --env-file-if-exists=.env --conditions=react-server --import tsx scripts/verify-data.ts",
-    "smoke:sarvam": "node scripts/pending.mjs smoke:sarvam P2",
+    "smoke:sarvam": "node --env-file-if-exists=.env --conditions=react-server --import tsx scripts/smoke-sarvam.ts",
     "smoke:gemini": "node scripts/pending.mjs smoke:gemini P3",
     "chat": "node scripts/pending.mjs chat P3",
     "eval": "node scripts/pending.mjs eval P5",
     "bench": "node scripts/pending.mjs bench P5"
   },
   "dependencies": {
+    "@ricky0123/vad-web": "0.0.31",
     "next": "16.4.6",
+    "onnxruntime-web": "1.31.1",
     "pino": "10.4.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",
