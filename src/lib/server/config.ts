@@ -2,6 +2,15 @@ import 'server-only';
 import { z } from 'zod';
 import { AppError } from '@/lib/errors';
 import {
+  compatibleSpeaker,
+  DEFAULT_SPEAKERS,
+  sttLanguageSchema,
+  sttModeSchema,
+  sttModelSchema,
+  ttsLanguageSchema,
+  ttsModelSchema,
+} from '@/lib/voice/sarvam-contracts';
+import {
   investigationPolicySchema,
   thresholdSchema,
 } from '@/lib/domain/settings';
@@ -45,22 +54,19 @@ const environmentSchema = z.object({
   GEMINI_RETRIES: integer(1, 0, 5),
   GEMINI_MAX_OUTPUT_TOKENS: integer(300),
   GEMINI_TEMPERATURE: numeric(z.number().min(0).max(2)).default(0.4),
-  SARVAM_STT_MODEL: z.string().min(1).default('saaras:v3'),
-  SARVAM_STT_LANGUAGE: z.enum(['en-IN', 'hi-IN', 'unknown']).default('en-IN'),
-  SARVAM_STT_MODE: optionalText,
-  SARVAM_TTS_MODEL: z.string().min(1).default('bulbul:v3'),
-  SARVAM_TTS_SPEAKER: z.string().min(1).default('priya'),
-  SARVAM_TTS_LANGUAGE: z.enum(['en-IN', 'hi-IN']).default('en-IN'),
-  SARVAM_TTS_LANGUAGE_FIELD: z
-    .enum(['language_code', 'target_language_code'])
-    .optional(),
+  SARVAM_STT_MODEL: sttModelSchema.default('saaras:v4'),
+  SARVAM_STT_LANGUAGE: sttLanguageSchema.default('unknown'),
+  SARVAM_STT_MODE: sttModeSchema.default('transcribe'),
+  SARVAM_TTS_MODEL: ttsModelSchema.default('bulbul:v4-flash'),
+  SARVAM_TTS_SPEAKER: z.string().min(1).optional(),
+  SARVAM_TTS_LANGUAGE: ttsLanguageSchema.default('en-IN'),
   SARVAM_TTS_PACE: numeric(z.number().min(0.5).max(2)).default(1),
   SARVAM_TTS_SAMPLE_RATE: z
     .literal(24000)
     .default(24000)
     .or(z.literal('24000').transform(() => 24000)),
   SARVAM_TIMEOUT_MS: integer(6000),
-  SARVAM_RETRIES: integer(1, 0, 5),
+  SARVAM_RETRIES: integer(1, 0, 1),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
@@ -116,15 +122,14 @@ export interface AppConfig {
     timeoutMs: number;
     retries: number;
     stt: {
-      model: string;
+      model: Environment['SARVAM_STT_MODEL'];
       language: Environment['SARVAM_STT_LANGUAGE'];
-      mode: string | undefined;
+      mode: Environment['SARVAM_STT_MODE'];
     };
     tts: {
-      model: string;
+      model: Environment['SARVAM_TTS_MODEL'];
       speaker: string;
       language: Environment['SARVAM_TTS_LANGUAGE'];
-      languageField: Environment['SARVAM_TTS_LANGUAGE_FIELD'];
       pace: number;
       sampleRate: number;
     };
@@ -159,6 +164,13 @@ export function parseConfig(
     throw new AppError('CONFIG_INVALID', `Invalid configuration: ${issues}`);
   }
   const env = parsed.data;
+  const speaker =
+    env.SARVAM_TTS_SPEAKER ?? DEFAULT_SPEAKERS[env.SARVAM_TTS_MODEL];
+  if (!compatibleSpeaker(env.SARVAM_TTS_MODEL, speaker))
+    throw new AppError(
+      'CONFIG_INVALID',
+      'Invalid configuration: SARVAM_TTS_SPEAKER must match SARVAM_TTS_MODEL',
+    );
   return {
     environment: env.NODE_ENV,
     port: env.PORT,
@@ -188,9 +200,8 @@ export function parseConfig(
       },
       tts: {
         model: env.SARVAM_TTS_MODEL,
-        speaker: env.SARVAM_TTS_SPEAKER,
+        speaker,
         language: env.SARVAM_TTS_LANGUAGE,
-        languageField: env.SARVAM_TTS_LANGUAGE_FIELD,
         pace: env.SARVAM_TTS_PACE,
         sampleRate: env.SARVAM_TTS_SAMPLE_RATE,
       },
