@@ -43,7 +43,7 @@ Read AGENTS.md and docs/01, docs/02 (§3-4), docs/05, docs/07 (§2). Implement O
 
 1) Scaffold
 - Next.js (latest stable, App Router), TypeScript strict, Tailwind, Node 22. npm only. ESLint (strict), Prettier, Vitest, zod, pino.
-- package.json scripts exactly as listed in AGENTS.md "Commands" (stub the ones for later phases with a clear "not implemented yet" exit 0 message).
+- package.json scripts exactly as listed in AGENTS.md "Commands" (later-phase commands must clearly identify their pending phase and exit non-zero until implemented; expanded P1 request supersedes the original exit-zero stub).
 - next.config: output "standalone". .env.example with every variable from docs/03 §6, docs/04 summary, docs/06 (Gemini/Sarvam keys blank, models per docs, caps, thresholds).
 - src/lib/server/config.ts: zod-parsed env, typed, defaults per docs, never throws for missing provider keys at import time (health reports configured=false).
 - GET /api/health → { ok, version, uptimeS, providers:{gemini:boolean,sarvam:boolean}, sessions:0 }. Placeholder src/app/page.tsx ("Virtual KAM — coming up").
@@ -53,14 +53,14 @@ Read AGENTS.md and docs/01, docs/02 (§3-4), docs/05, docs/07 (§2). Implement O
 - scripts/verify-data.ts asserting every invariant in docs/05 §2-3 (sums, OOS counts, orders×ASP=sales, derived 123 / 94.6% / 47.5% / ₹61,500). npm run verify-data must exit non-zero on violation.
 
 3) Domain (src/lib/domain, pure, no I/O, no Date.now – inject `today: Date`)
-- types.ts (zod schemas + inferred types), data.ts (loader/validator).
+- types.ts (zod schemas + inferred types); pure data schemas/calculations in domain, JSON loading in src/lib/server/data-loader.ts.
 - metrics.ts: bridge() and netBridge() per docs/01 §2 (return numbers, percentages with 1 decimal, shares).
 - signals.ts: all 7 signals from docs/02 §3.1 with thresholds from a config object (defaults per docs).
 - hypotheses.ts: evidence-weights table as DATA (docs/02 §3.2), scoreHypotheses(evidence[]) → [{id,score,level}] sorted; facts update scores; margin(); level thresholds ≥4 high, ≥2 medium.
 - questions.ts: bank (docs/02 §3.4) + pickNextQuestion(state) per §3.3 + readyToRecommend(state) + maxQuestions=3.
 - actions.ts: catalog table (docs/02 §4) with eligibility predicates, owners, due offsets, metrics; buildPlan(state, today) selects top 3 (min 2) + always A_FOLLOWUP; fills parameters from data (spoken SKU names, order counts, ceiling "up to ₹61,500 if fully recovered"); price action only if competitor_undercut=yes.
 - diagnosis.ts: computeDiagnosis(state) → { signals, hypotheses, suggestedNextQuestion, questionsLeft, readyToRecommend, evidence[] } where state = { facts, questionsAsked, toolsCalled }.
-- ledger.ts: appendPlan(plan, dataDir) → JSONL line; listLatest(n). (This is the only file here allowed to do fs I/O; keep it separate and injectable.)
+- src/lib/server/ledger.ts: appendPlan(committedRecord, dataDir) → JSONL line; listLatest(n). Filesystem work stays outside the pure domain tree.
 - speech.ts: lintSpeech(text, phase) rules from docs/07 §2 (markdown, symbols/₹/Rs/%, SKU-code regex, word limits per phase, ≤1 '?').
 
 4) Tests (tests/domain/*.test.ts) with the exact numbers in docs/07 §2 (bridge −65000/−32.5%; net 368→232.2, −67900/−36.9%, shares 88.1/11.9; hypothesis scores 4/1/1/1/−1 then 9 then 11; picker order; plan composition for S1; guards not here yet).
@@ -111,7 +111,7 @@ LLM
 
 Agent
 - src/lib/agent/prompts/system.ts: system prompt from docs/02 §7 with {{shopName}}; export PROMPT_VERSION. Per-turn system note builder: [PHASE: x | QUESTIONS_LEFT: n | MUST_DO: …] + compact facts/hypotheses summary (no long history dumps).
-- src/lib/agent/tools.ts: zod schemas + Gemini function declarations + executors for the 7 tools in docs/03 §5 using src/lib/domain. Every executor returns {ok:true,…}|{ok:false,error}. Include `synthetic:true` on SKU/cancel results. record_seller_fact updates session facts and returns recomputed diagnosis. propose_action_plan and commit_action_plan guards EXACTLY as docs/03 §5 (propose: ids subset of eligible, 2–3, ready, no price action w/o undercut; commit: plan proposed in an EARLIER turn, confirmationQuote substring of normalised lastUserText, affirmative+negation check, accepted ⊂ plan). commit appends to ledger via domain/ledger and sets followUpDate = today+7.
+- src/lib/agent/tools.ts: zod schemas + Gemini function declarations + executors for the 7 tools in docs/03 §5 using src/lib/domain. Every executor returns {ok:true,…}|{ok:false,error}. Include `synthetic:true` on SKU/cancel results. record_seller_fact updates session facts and returns recomputed diagnosis. propose_action_plan and commit_action_plan guards EXACTLY as docs/03 §5 (propose: ids subset of eligible, 2–3, ready, no price action w/o undercut; commit: plan proposed in an EARLIER turn, confirmationQuote substring of normalised lastUserText, affirmative+negation check, accepted ⊂ plan). commit appends a validated committed record via src/lib/server/ledger.ts and sets followUpDate = today+7.
 - src/lib/agent/phases.ts: phase machine + guards + per-phase tool filtering (e.g., commit tool only offered in CONFIRM) per docs/02 §2.
 - src/lib/server/session-store.ts: Map + TTL 30 min, caps (25 turns, 10 min), history trimming (last ~12 messages + compact facts summary; summarise tool results after use).
 - src/lib/agent/orchestrator.ts: runTurn(session, input, emit): (audio→STT if needed) → LLM loop (≤4 tool rounds) → text deltas → chunker → TTS (≤2 in flight, strictly ordered emit) → `state` event after tool calls and at turn end → `done` with timings. Emit `tool` events with human labels ("Checking your numbers", "Checking stock by product", "Checking cancellation reasons", "Saving your plan"). Idempotency per (sessionId, turnId) for 60 s.

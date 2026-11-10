@@ -36,7 +36,7 @@ Orchestrator injects a one-line `[PHASE: x | questions left: n | must-do: …]` 
 | S_ASP_FLAT | \|ASP Δ\| ≤ 3% | ✅ |
 | S_OOS_SPIKE | OOS ×≥2 and ≥+5 | ✅ (3.6×, +13) |
 | S_CANCEL_UP | cancel Δ ≥ +3 pp | ✅ (+6) |
-| S_SKU_CONCENTRATION | OOS SKUs ≥70% of net order decline | ✅ (94.6%) |
+| S_SKU_CONCENTRATION | OOS SKUs ≥70% of gross placed-order decline | ✅ (94.6%) |
 | S_CANCEL_STOCK_DOMINANT | stock_unavailable ≥50% of cancels | ✅ (55%) |
 | S_CANCEL_DISPATCH_DOMINANT | dispatch_delay+courier ≥40% of cancels | ❌ (26%) |
 
@@ -65,6 +65,8 @@ Level: ≥4 **high**, 2–3.9 **medium**, <2 **low**. Sample after snapshot only
 4. else if budget remains → **Q_VIEWS** (rule-out visibility, since funnel is unavailable)
 Ready-to-recommend: `asked ≥ 3` or (`asked ≥ 2` and `margin(top, second) ≥ 3`).
 
+P1 edge cases: stock denial (`oos_confirmed=no`) asks Q_DISPATCH before ETA when dispatch is unknown. Restock inability (`can_restock_partial=no`) asks Q_CAPACITY once before early readiness, within the same three-question budget. The cap still wins. A leading FULFIL, VIS or PRICE hypothesis uses its corresponding documented question before the second-ranked hypothesis and views fallback. Recorded unknown answers add no hypothesis weight and questions are never repeated. See `p1-decisions.md` for implementation choices.
+
 ### 3.4 Question bank (spoken, one at a time, ≤ 20 words)
 | ID | Spoken form | Records |
 |---|---|---|
@@ -89,6 +91,8 @@ Ready-to-recommend: `asked ≥ 3` or (`asked ≥ 2` and `margin(top, second) ≥
 
 Selection: rank eligible by `score(hypothesis) × impactWeight × feasibility(seller facts)`; take top **3** (min 2). Plan always carries A_FOLLOWUP.
 Parameters are filled by code from data (SKU names, order counts, ₹ ceiling). Impact text always uses "up to" and "if fully recovered".
+
+P1 policy values (demo assumptions, not calibrated predictions): impact weights are RESTOCK 1, STOCK_SYNC 0.9, PUSH_INSTOCK 0.8, DISPATCH 6, VISIBILITY 3, PRICE_CHECK 2. Dispatch and visibility weights allow reported operational problems to replace the third stock action. Restock feasibility is zero when even a partial batch is impossible, 0.5 for a cash constraint, 0.95 for an ETA beyond seven days, and 1 otherwise or when a partial batch is confirmed. A healthy hero has positive current orders and at least ten units in stock. Stock-sync eligibility uses a thirty-percent stock-cancel share. All values live in policy/catalog tables. Fewer than two eligible actions returns a typed error rather than inventing a recommendation. Follow-up remains a separate checkpoint.
 
 ## 5. The ownership loop (the differentiator)
 

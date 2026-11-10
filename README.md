@@ -1,5 +1,25 @@
 # Snapdeal Virtual KAM — design pack
 
+## Implementation status — P1 complete
+
+SellerSaathi now includes the Next.js foundation, exact validated mock datasets, deterministic diagnosis and recovery planning, speech validation, an append-only committed-plan ledger, and an initial branded shell. Voice, provider adapters, the agent and deployment remain pending their assigned phases.
+
+Use Node.js 22.12 or later within Node 22 and npm. From the repository root:
+
+```sh
+npm ci
+# Optional: copy .env.example to .env; P1 does not need provider keys.
+npm run dev
+```
+
+Production locally: `npm run build`, then `npm start`. Startup copies static assets and mock data into the generated standalone directory and launches its server. Set `PORT` and `HOSTNAME` in `.env` or the shell. `npm run verify-data` and the domain tests require no provider calls. `npm run lint`, `npm run typecheck`, `npm test`, and `npm run verify-data` are the P1 verification commands. `npm run test:watch` starts Vitest watch mode.
+
+`/api/health` reports provider **configuration**, not connectivity. It returns HTTP 200 with absent optional credentials, HTTP 503 for invalid explicit configuration, and zero active sessions in P1. `DATA_DIR` is writable ledger storage; `MOCK_DATA_DIR` is the read-only fixture source. Server modules use the `server-only` marker. The verifier runs with Node's `react-server` condition so CLI loading preserves that boundary.
+
+Later-phase scripts (`smoke:sarvam`, `smoke:gemini`, `chat`, `eval`, `bench`) identify the pending phase and exit with status 1. No successful provider smoke, eval, deployment or latency result is claimed.
+
+See [P1 decisions](docs/p1-decisions.md) for resolved documentation conflicts and policy choices. The design pack below describes the complete planned application, including work beyond P1.
+
 Voice-first **Seller Recovery Agent**: a seller says "my sales dropped"; the bot reads their numbers, finds the real driver, asks ≤3 plan-changing questions, proposes 2–3 owned actions, saves the plan on a verified spoken "yes", and sets a 7-day review.
 
 ## Files

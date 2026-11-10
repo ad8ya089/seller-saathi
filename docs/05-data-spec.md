@@ -48,7 +48,7 @@ Shape:
 - OOS this = (# SKUs with stock 0 = 3) + tail.oosThis (15) = **18**; OOS last = 0 + tail.oosLast = **5**.
 - Orders × ASP = Sales for both periods.
 - Derived (computed, never hand-typed in prompts/UI):
-  - OOS-SKU decline = (96−31)+(58−22)+(36−14) = **123**; share of net decline 123/130 = **94.6%**
+  - OOS-SKU decline = (96−31)+(58−22)+(36−14) = **123**; share of gross placed-order decline 123/130 = **94.6%**. This is separate from the net-of-cancellation bridge.
   - OOS-SKU share of last-month orders = 190/400 = **47.5%**
   - Recovery ceiling = 123 × 500 = **₹61,500**
 
