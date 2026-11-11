@@ -60,6 +60,12 @@ const environmentSchema = z.object({
   SARVAM_STT_MODEL: sttModelSchema.default('saaras:v4'),
   SARVAM_STT_LANGUAGE: sttLanguageSchema.default('unknown'),
   SARVAM_STT_MODE: sttModeSchema.default('transcribe'),
+  HINGLISH_ENABLED: boolean,
+  SARVAM_HI_STT_MODEL: sttModelSchema.optional(),
+  SARVAM_HI_STT_MODE: sttModeSchema.exclude(['translate']).default('codemix'),
+  SARVAM_HI_TTS_MODEL: ttsModelSchema.optional(),
+  SARVAM_HI_TTS_SPEAKER: z.string().min(1).optional(),
+  SARVAM_HI_TTS_PACE: numeric(z.number().min(0.5).max(2)).default(1),
   SARVAM_TTS_MODEL: ttsModelSchema.default('bulbul:v4-flash'),
   SARVAM_TTS_SPEAKER: z.string().min(1).optional(),
   SARVAM_TTS_LANGUAGE: ttsLanguageSchema.default('en-IN'),
@@ -120,6 +126,7 @@ const environmentSchema = z.object({
 
 type Environment = z.infer<typeof environmentSchema>;
 export interface AppConfig {
+  hinglishEnabled: boolean;
   sellerSimModel: string;
   environment: Environment['NODE_ENV'];
   port: number;
@@ -150,6 +157,20 @@ export interface AppConfig {
       language: Environment['SARVAM_TTS_LANGUAGE'];
       pace: number;
       sampleRate: number;
+    };
+    hindi: {
+      stt: {
+        model: Environment['SARVAM_STT_MODEL'];
+        language: 'hi-IN';
+        mode: Environment['SARVAM_STT_MODE'];
+      };
+      tts: {
+        model: Environment['SARVAM_TTS_MODEL'];
+        speaker: string;
+        language: 'hi-IN';
+        pace: number;
+        sampleRate: number;
+      };
     };
   };
   logLevel: Environment['LOG_LEVEL'];
@@ -188,12 +209,21 @@ export function parseConfig(
   const env = parsed.data;
   const speaker =
     env.SARVAM_TTS_SPEAKER ?? DEFAULT_SPEAKERS[env.SARVAM_TTS_MODEL];
+  const hindiModel = env.SARVAM_HI_TTS_MODEL ?? env.SARVAM_TTS_MODEL;
+  const hindiSpeaker =
+    env.SARVAM_HI_TTS_SPEAKER ?? DEFAULT_SPEAKERS[hindiModel];
+  if (!compatibleSpeaker(hindiModel, hindiSpeaker))
+    throw new AppError(
+      'CONFIG_INVALID',
+      'Invalid configuration: Hindi speaker must match the Hindi TTS model',
+    );
   if (!compatibleSpeaker(env.SARVAM_TTS_MODEL, speaker))
     throw new AppError(
       'CONFIG_INVALID',
       'Invalid configuration: SARVAM_TTS_SPEAKER must match SARVAM_TTS_MODEL',
     );
   return {
+    hinglishEnabled: env.HINGLISH_ENABLED,
     sellerSimModel: env.SELLER_SIM_MODEL,
     environment: env.NODE_ENV,
     port: env.PORT,
@@ -216,6 +246,20 @@ export function parseConfig(
       apiKey: env.SARVAM_API_KEY,
       timeoutMs: env.SARVAM_TIMEOUT_MS,
       retries: env.SARVAM_RETRIES,
+      hindi: {
+        stt: {
+          model: env.SARVAM_HI_STT_MODEL ?? env.SARVAM_STT_MODEL,
+          language: 'hi-IN',
+          mode: env.SARVAM_HI_STT_MODE,
+        },
+        tts: {
+          model: hindiModel,
+          speaker: hindiSpeaker,
+          language: 'hi-IN',
+          pace: env.SARVAM_HI_TTS_PACE,
+          sampleRate: env.SARVAM_TTS_SAMPLE_RATE,
+        },
+      },
       stt: {
         model: env.SARVAM_STT_MODEL,
         language: env.SARVAM_STT_LANGUAGE,

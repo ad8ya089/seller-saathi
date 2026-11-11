@@ -9,6 +9,8 @@ import type {
 import type { SellerData } from '@/lib/domain/data-schemas';
 import type { LlmMessage, TokenUsage } from '@/lib/llm/provider';
 import type { ToolName } from '@/lib/agent/tool-contracts';
+import type { Language } from '@/lib/voice/language';
+import { AppError } from '@/lib/errors';
 
 export interface HistoryTurn {
   turn: number;
@@ -28,7 +30,7 @@ export interface PlaybackResponse {
 export interface Session {
   id: string;
   createdAt: number;
-  lang: 'en-IN';
+  readonly lang: Language;
   mode: 'call';
   phase: Phase;
   turn: number;
@@ -92,6 +94,11 @@ export function trimHistory(session: Session, maxMessages = 12): void {
     session.history.shift();
 }
 export function replaceSession(base: Session, draft: Session): void {
+  if (base.lang !== draft.lang)
+    throw new AppError(
+      'INVALID_INPUT',
+      'Start a fresh session to change language or call mode',
+    );
   delete base.proposedPlan;
   delete base.pendingCommit;
   delete base.committedPlan;

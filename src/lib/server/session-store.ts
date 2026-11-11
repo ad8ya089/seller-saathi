@@ -3,6 +3,8 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { AppError } from '@/lib/errors';
 import type { Session } from '@/lib/agent/session';
+import { languageSchema } from '@/lib/voice/language';
+import type { Language } from '@/lib/voice/language';
 
 interface Limits {
   ttlMs: number;
@@ -23,12 +25,12 @@ export class SessionStore {
     private readonly now: () => number = Date.now,
     private readonly createId: () => string = randomUUID,
   ) {}
-  create(): Session {
+  create(options: { lang?: Language } = {}): Session {
     this.prune();
     const session: Session = {
       id: this.createId(),
       createdAt: this.now(),
-      lang: 'en-IN',
+      lang: languageSchema.parse(options.lang ?? 'en-IN'),
       mode: 'call',
       phase: 'greeting',
       turn: 0,

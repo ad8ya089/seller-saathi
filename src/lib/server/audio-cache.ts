@@ -1,5 +1,6 @@
 import 'server-only';
-import { CLIP_TEXT, clipBundleSchema } from '@/lib/voice/clips';
+import { CLIP_TEXT, clipBundleSchema, clipText } from '@/lib/voice/clips';
+import type { Language } from '@/lib/voice/language';
 import type { ClipBundle, ClipName } from '@/lib/voice/clips';
 import type { TtsProvider } from '@/lib/voice/providers';
 import { validateWav } from '@/lib/voice/wav';
@@ -13,9 +14,11 @@ export class AudioCache {
   constructor(
     private readonly tts: TtsProvider,
     private readonly identity: {
-      language: 'en-IN';
+      language: Language;
       model: string;
       speaker: string;
+      pace?: number;
+      sampleRate?: number;
     },
     configured = true,
   ) {
@@ -37,7 +40,10 @@ export class AudioCache {
         let pending = this.entries.get(key);
         if (!pending) {
           pending = this.tts
-            .synthesize(CLIP_TEXT[name], this.identity.language)
+            .synthesize(
+              clipText(this.identity.language)[name],
+              this.identity.language,
+            )
             .then((result) => {
               validateWav(result.wav, {
                 sampleRates: [VOICE_LIMITS.outputSampleRate],

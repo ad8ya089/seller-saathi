@@ -7,6 +7,7 @@ import { getConfig } from '@/lib/server/config';
 import { AUDITION_SPEAKERS } from '@/lib/voice/sarvam-contracts';
 import { SarvamStt } from '@/lib/voice/sarvam-stt';
 import { SarvamTts } from '@/lib/voice/sarvam-tts';
+import { smokeHinglish } from './smoke-hinglish';
 
 interface SmokeResult {
   kind: 'tts' | 'stt';
@@ -40,7 +41,27 @@ function markdown(
 }
 
 async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  if (
+    args.some(
+      (arg) => !['--hinglish', '--preflight', '--confirm-spend'].includes(arg),
+    )
+  )
+    throw new AppError(
+      'INVALID_INPUT',
+      'Use --hinglish, --preflight and/or --confirm-spend.',
+    );
+  if (args.includes('--hinglish')) return smokeHinglish(args);
   const sarvam = getConfig().sarvam;
+  console.log(
+    `Sarvam audition preflight: five TTS plus four STT logical requests; at most ${String(9 * (sarvam.retries + 1))} HTTP attempts with configured retries.`,
+  );
+  if (args.includes('--preflight') || !args.includes('--confirm-spend')) {
+    console.log(
+      'No provider requests made. Add --confirm-spend after approving the audition preflight.',
+    );
+    return;
+  }
   if (!sarvam.apiKey) {
     console.error(
       'Set SARVAM_API_KEY privately in the local .env, then run npm run smoke:sarvam.',
