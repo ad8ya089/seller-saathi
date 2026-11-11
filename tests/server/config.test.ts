@@ -31,7 +31,7 @@ describe('environment configuration', () => {
     expect(config.logTranscripts).toBe(false);
     expect(config.sessionTtlMs).toBe(1_800_000);
     expect(config.maxUtteranceMs).toBe(28_000);
-    expect(config.dataDir).toBe('.data');
+    expect(config.dataDir).toBe('/tmp/kam');
     expect(config.compactToolHistory).toBe(false);
   });
 

@@ -1,5 +1,9 @@
 import 'server-only';
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
+import { appendFile, mkdir } from 'node:fs/promises';
+import {
+  assertLedgerSpace,
+  readBoundedLedger,
+} from '@/lib/server/bounded-ledger';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 import { AppError } from '@/lib/errors';
@@ -14,7 +18,7 @@ const writes = new Map<string, Promise<void>>();
 async function readRecords(filename: string): Promise<CommittedPlan[]> {
   let contents: string;
   try {
-    contents = await readFile(filename, 'utf8');
+    contents = await readBoundedLedger(filename);
   } catch (error: unknown) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
       return [];
@@ -84,7 +88,9 @@ export async function appendPlan(
             return;
           }
         }
-        await appendFile(filename, `${JSON.stringify(parsed.data)}\n`, {
+        const line = `${JSON.stringify(parsed.data)}\n`;
+        await assertLedgerSpace(filename, Buffer.byteLength(line));
+        await appendFile(filename, line, {
           encoding: 'utf8',
           flag: 'a',
           mode: 0o600,

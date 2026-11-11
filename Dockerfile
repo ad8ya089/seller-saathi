@@ -17,7 +17,7 @@ RUN npm run build
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
-ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 DATA_DIR=/data \
+ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 DATA_DIR=/tmp/kam \
     MOCK_DATA_DIR=/app/data NEXT_TELEMETRY_DISABLED=1
 RUN addgroup -S -g 10001 app && adduser -S -D -H -u 10001 -G app app \
     && mkdir -p /data && chown 10001:10001 /data && chmod 0700 /data

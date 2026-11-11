@@ -1,5 +1,9 @@
 import 'server-only';
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
+import { appendFile, mkdir } from 'node:fs/promises';
+import {
+  assertLedgerSpace,
+  readBoundedLedger,
+} from '@/lib/server/bounded-ledger';
 import { resolve } from 'node:path';
 import { AppError } from '@/lib/errors';
 import { followupAuditSchema } from '@/lib/domain/followup-types';
@@ -9,9 +13,8 @@ import { throwIfAborted } from '@/lib/voice/abort';
 const writes = new Map<string, Promise<void>>();
 async function records(directory: string): Promise<FollowupAudit[]> {
   try {
-    const contents = await readFile(
+    const contents = await readBoundedLedger(
       resolve(directory, 'followup-audits.jsonl'),
-      'utf8',
     );
     if (!contents) return [];
     if (!contents.endsWith('\n')) throw new Error('Incomplete record');
@@ -20,6 +23,7 @@ async function records(directory: string): Promise<FollowupAudit[]> {
       .split('\n')
       .map((line) => followupAuditSchema.parse(JSON.parse(line) as unknown));
   } catch (error: unknown) {
+    if (error instanceof AppError) throw error;
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
       return [];
     throw new AppError(
@@ -72,7 +76,9 @@ export async function appendAudit(
       }
       try {
         await mkdir(resolve(directory), { recursive: true, mode: 0o700 });
-        await appendFile(key, `${JSON.stringify(parsed.data)}\n`, {
+        const line = `${JSON.stringify(parsed.data)}\n`;
+        await assertLedgerSpace(key, Buffer.byteLength(line));
+        await appendFile(key, line, {
           flag: 'a',
           encoding: 'utf8',
           mode: 0o600,

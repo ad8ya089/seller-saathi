@@ -6,6 +6,10 @@ import { publicErrorSchema } from '@/lib/voice/events';
 import type { z } from 'zod';
 
 const MESSAGES: Readonly<Partial<Record<ErrorCode, string>>> = {
+  LEDGER_IO:
+    'The plan was not saved. Temporary demo storage is unavailable or full. Please retry.',
+  LEDGER_INVALID:
+    'The demo ledger could not be validated. No new save was confirmed.',
   RATE_LIMIT: 'Too many requests. Please wait before trying again.',
   DAILY_LIMIT: 'The demo reached its daily budget. Please return tomorrow.',
   ACCESS_DENIED: 'Enter the demo access code to continue.',

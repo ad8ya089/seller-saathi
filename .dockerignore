@@ -2,6 +2,7 @@
 .git/**
 .env*
 **/.env*
+env.cloudrun.yaml
 .data
 **/.data
 .next
@@ -40,6 +41,12 @@ deploy
 .deployed-commit
 .previous-image
 .expected-eip
+**/*credentials*.json
+**/service-account*.json
+**/*.pem
+**/*.key
+.aws
+.config
 Dockerfile
 .dockerignore
 scripts/deployment

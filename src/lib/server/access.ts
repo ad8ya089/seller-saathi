@@ -25,6 +25,16 @@ export function assertAccess(request: Request, config: AppConfig): void {
     throw new AppError('ACCESS_DENIED', 'Demo access code required');
 }
 export function peerKey(request: Request, config: AppConfig): string {
+  if (config.proxyMode === 'cloud-run') {
+    // Opt-in for direct run.app only: one trusted frontend hop. Never scan
+    // leftward past a malformed final slot into caller-controlled prefixes.
+    const ip = request.headers
+      .get('x-forwarded-for')
+      ?.split(',')
+      .at(-1)
+      ?.trim();
+    return ip && isIP(ip) ? ip : 'unverified-peer';
+  }
   // Web Request has no authenticated socket address. Unknown peers share a
   // conservative bucket; forwarding is trusted only with a proxy-held secret.
   if (

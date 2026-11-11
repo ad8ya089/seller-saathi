@@ -10,7 +10,10 @@ const hostSchema = z
 
 export function assertSameOrigin(
   request: Request,
-  deployment?: { domain?: string | undefined },
+  deployment?: {
+    domain?: string | undefined;
+    proxyMode?: 'caddy' | 'cloud-run';
+  },
 ): void {
   if (request.headers.get('Sec-Fetch-Site') === 'cross-site')
     throw new AppError('INVALID_INPUT', 'Cross-site requests are not allowed');
@@ -26,6 +29,13 @@ export function assertSameOrigin(
         ? internal.origin
         : new URL(`${internal.protocol}//${hostSchema.parse(host)}`).origin;
     if (origin === expected) return;
+    if (
+      deployment?.proxyMode === 'cloud-run' &&
+      host &&
+      /^[a-z0-9-]+(?:\.[a-z0-9-]+)*\.run\.app$/.test(host) &&
+      origin === `https://${host}`
+    )
+      return;
     if (
       deployment?.domain &&
       host === deployment.domain &&

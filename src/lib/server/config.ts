@@ -102,7 +102,8 @@ const environmentSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((value) => value === 'true'),
-  DATA_DIR: z.string().trim().min(1).default('.data'),
+  DATA_DIR: z.string().trim().min(1).default('/tmp/kam'),
+  PROXY_MODE: z.enum(['caddy', 'cloud-run']).default('caddy'),
   MOCK_DATA_DIR: z.string().trim().min(1).default('data'),
   DEMO_ACCESS_CODE: optionalText,
   TRUSTED_PROXY_TOKEN: optionalText,
@@ -187,6 +188,7 @@ export interface AppConfig {
   maxToolRounds: number;
   compactToolHistory: boolean;
   dataDir: string;
+  proxyMode: 'caddy' | 'cloud-run';
   mockDataDir: string;
   demoAccessCode: string | undefined;
   trustedProxyToken: string | undefined;
@@ -287,6 +289,7 @@ export function parseConfig(
     maxToolRounds: env.MAX_TOOL_ROUNDS,
     compactToolHistory: env.COMPACT_TOOL_HISTORY,
     dataDir: env.DATA_DIR,
+    proxyMode: env.PROXY_MODE,
     mockDataDir: env.MOCK_DATA_DIR,
     demoAccessCode: env.DEMO_ACCESS_CODE,
     trustedProxyToken: env.TRUSTED_PROXY_TOKEN,

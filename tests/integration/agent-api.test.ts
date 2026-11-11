@@ -21,6 +21,8 @@ import { buildPlan } from '@/lib/domain/actions';
 import { domainState } from '@/lib/agent/session';
 import { agentStateSchema, sessionResponseSchema } from '@/lib/agent/contracts';
 import { AppError } from '@/lib/errors';
+import type { ToolEnvironment } from '@/lib/agent/tools';
+import { publicErrorSchema } from '@/lib/voice/events';
 import { fixture } from '../fixtures';
 import { wavFixture } from '../voice/fixtures';
 
@@ -99,6 +101,37 @@ function proposed(services: AgentServices): ReturnType<SessionStore['create']> {
   return session;
 }
 describe('agent HTTP boundaries', () => {
+  it('returns a recoverable storage error without confirming a failed save, then permits retry', async () => {
+    const services = await rig();
+    const original = services.toolEnvironment;
+    services.toolEnvironment = async (): Promise<ToolEnvironment> => ({
+      ...(await original()),
+      append: (): Promise<void> =>
+        Promise.reject(
+          new AppError('LEDGER_IO', 'private filesystem detail', true),
+        ),
+    });
+    const session = proposed(services);
+    const body = {
+      sessionId: session.id,
+      planId: session.proposedPlan?.plan.id,
+      decision: 'accept',
+    };
+    const handler = createConfirmHandler(services);
+    const failed = await handler(request('confirm', body));
+    expect(failed.status).toBe(503);
+    const failure = publicErrorSchema.parse(await failed.json());
+    expect(failure).toMatchObject({
+      code: 'LEDGER_IO',
+      retryable: true,
+    });
+    expect(failure.message).toContain('not saved');
+    expect(session.committedPlan).toBeUndefined();
+    expect(await services.ledger()).toHaveLength(0);
+    services.toolEnvironment = original;
+    expect((await handler(request('confirm', body))).status).toBe(200);
+    expect(await services.ledger()).toHaveLength(1);
+  });
   it('creates Hindi only after its verification gate and keeps greetings separate from English', async () => {
     const tts = new FakeTts(wavFixture({ sampleRate: 24000 }));
     const services = await rig(tts);

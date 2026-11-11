@@ -42,6 +42,33 @@ function record(id: string): CommittedPlan {
 }
 
 describe('append-only committed-plan ledger', () => {
+  it('refuses an append crossing the byte budget and retains accepted ownership records', async () => {
+    const filename = join(directory, 'ledger.jsonl');
+    const original = record('retained');
+    const line = JSON.stringify(original);
+    const contents =
+      line + ' '.repeat(8 * 1024 * 1024 - line.length - 11) + '\n';
+    await writeFile(filename, contents);
+    await expect(
+      appendPlan(record('overflow'), directory),
+    ).rejects.toMatchObject({ code: 'LEDGER_IO', retryable: true });
+    expect(await listLatest(20, directory)).toEqual([original]);
+    expect(await readFile(filename, 'utf8')).toBe(contents);
+  });
+  it('refuses oversized files without reading or extending their contents', async () => {
+    const filename = join(directory, 'ledger.jsonl');
+    const oversized = 'x'.repeat(8 * 1024 * 1024 + 1);
+    await writeFile(filename, oversized);
+    await expect(listLatest(20, directory)).rejects.toMatchObject({
+      code: 'LEDGER_IO',
+      retryable: true,
+    });
+    await expect(appendPlan(record('full'), directory)).rejects.toMatchObject({
+      code: 'LEDGER_IO',
+      retryable: true,
+    });
+    expect(await readFile(filename, 'utf8')).toBe(oversized);
+  });
   it('supports unique guarded appends without changing the versioned P1 append contract', async () => {
     await Promise.all(
       Array.from({ length: 4 }, () =>

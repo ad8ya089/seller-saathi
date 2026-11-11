@@ -56,6 +56,10 @@ export function SellerDashboard({
             </p>
           )}
         </div>
+        <p className="mb-4 text-sm text-slate-600">
+          Temporary demo ledger: saved plans may disappear when this demo
+          restarts. Nothing is sent to Snapdeal.
+        </p>
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(340px,0.85fr)_minmax(0,1.35fr)]">
           <VoiceConsole
             voice={voice}

@@ -1,5 +1,10 @@
 # 06 — Deployment preparation
 
+Current selected path: [Cloud Run manual runbook](10-cloud-run-runbook.md), following
+[the deployment reassessment](09-deployment-reassessment.md). The EC2 material
+below is historical preparation. Roster Sync is off-limits. Cloud Run uses temporary
+demo storage; only explicit local volume mounts provide the local persistence described below.
+
 P6 packages SellerSaathi for EC2; it does not provision or publish it. Follow the complete [EC2 runbook](../deploy/aws-ec2/README.md). Actual local results and remaining gates are in the [P6 report](p6-report.md). These replace the original untested deployment snippets.
 
 ## Topology

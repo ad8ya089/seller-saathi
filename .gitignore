@@ -6,6 +6,8 @@ coverage/
 next-env.d.ts
 .env*
 !.env.example
+!.env.cloudrun.example.yaml
+env.cloudrun.yaml
 .data/
 public/vad/
 *.log
