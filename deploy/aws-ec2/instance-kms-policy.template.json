@@ -1,0 +1,23 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DecryptSelectedProjectKeyViaParameterStore",
+      "Effect": "Allow",
+      "Action": "kms:Decrypt",
+      "Resource": "arn:aws:kms:${AWS_REGION}:${AWS_ACCOUNT_ID}:key/${KMS_KEY_ID}",
+      "Condition": {
+        "StringEquals": {
+          "kms:ViaService": "ssm.${AWS_REGION}.amazonaws.com",
+          "kms:EncryptionContext:PARAMETER_ARN": [
+            "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/snapdeal-kam/GEMINI_API_KEY",
+            "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/snapdeal-kam/SARVAM_API_KEY",
+            "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/snapdeal-kam/TRUSTED_PROXY_TOKEN",
+            "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/snapdeal-kam/INTERNAL_METRICS_TOKEN",
+            "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/snapdeal-kam/DEMO_ACCESS_CODE"
+          ]
+        }
+      }
+    }
+  ]
+}

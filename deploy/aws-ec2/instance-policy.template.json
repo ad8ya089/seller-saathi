@@ -1,0 +1,34 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadRequiredProjectParameters",
+      "Effect": "Allow",
+      "Action": ["ssm:GetParameter", "ssm:GetParameters"],
+      "Resource": [
+        "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/snapdeal-kam/GEMINI_API_KEY",
+        "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/snapdeal-kam/SARVAM_API_KEY",
+        "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/snapdeal-kam/TRUSTED_PROXY_TOKEN",
+        "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/snapdeal-kam/INTERNAL_METRICS_TOKEN",
+        "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/snapdeal-kam/DEMO_ACCESS_CODE"
+      ]
+    },
+    {
+      "Sid": "DenyOtherParameterReadsIncludingManagedPolicyGrants",
+      "Effect": "Deny",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:GetParametersByPath",
+        "ssm:GetParameterHistory"
+      ],
+      "NotResource": [
+        "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/snapdeal-kam/GEMINI_API_KEY",
+        "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/snapdeal-kam/SARVAM_API_KEY",
+        "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/snapdeal-kam/TRUSTED_PROXY_TOKEN",
+        "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/snapdeal-kam/INTERNAL_METRICS_TOKEN",
+        "arn:aws:ssm:${AWS_REGION}:${AWS_ACCOUNT_ID}:parameter/snapdeal-kam/DEMO_ACCESS_CODE"
+      ]
+    }
+  ]
+}

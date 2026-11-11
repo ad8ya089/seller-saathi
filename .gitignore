@@ -14,3 +14,9 @@ Thumbs.db
 .tmp/
 test-results/
 playwright-report/
+
+**/__pycache__/
+*.pyc
+/.deployed-commit
+/.previous-image
+/.expected-eip
