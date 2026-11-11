@@ -1,6 +1,6 @@
 # P7 — Hinglish mode and simulated Day-7 follow-up
 
-Verification date: **2026-11-11, Asia/Kolkata**. P7 implementation is complete; live Hindi verification and physical language quality are pending. Hindi remains disabled (`HINGLISH_ENABLED=false`) until the bounded smoke is explicitly approved and passes. No paid P7 provider run was authorized or executed. This report does not claim the complete release definition of done or close the P5 gates.
+Verification date: **2026-11-11, Asia/Kolkata**. P7 implementation is complete; live Hindi verification and physical language quality remain pending. After the user approved the bounded Hindi smoke, its single TTS attempt timed out and execution stopped before STT. Hindi remains disabled (`HINGLISH_ENABLED=false`). This report does not claim the complete release definition of done or close the P5 gates.
 
 ## 1. Language implementation
 
@@ -25,7 +25,9 @@ TTS retains the verified REST fields: `text`, `language_code`, `model`, `speaker
 
 `npm run smoke:sarvam -- --hinglish --preflight` printed a maximum of **two requests, zero retries**: one short Roman Hinglish synthesis, then one code-mixed recognition request using that synthetic WAV. The planned text is “Meri sale gir gayi hai. Supplier late hai, stock check karte hain.” No Gemini call or repeated audition is included.
 
-Fresh approval was requested after offline tests passed. No answer approving that scope was received during this work. **Live requests attempted: 0; successful: 0; failed: 0; outcome: not run.** No Hindi audio quality claim is made and the local UI gate remains off. After approval, the exact command is `npm run smoke:sarvam -- --hinglish --confirm-spend`. Failed synthesis stops before STT; failures are reported without silently substituting providers.
+The user subsequently approved exactly this bounded scope. `npm run smoke:sarvam -- --hinglish --confirm-spend` ran once, recording its result at **2026-11-11T11:39:25.331Z**. **TTS attempted: 1; successful: 0; failed: 1 (`PROVIDER_TIMEOUT`). STT attempted: 0. Retries: 0.** The configured Sarvam per-request deadline was **6,000 ms**. No WAV or transcript was produced, so recognition was not exercised. The private machine-readable failure record is `.data/audition/hinglish-smoke.json`; aggregate evidence is in [provider-notes.md](provider-notes.md).
+
+The timeout is inconclusive about Hindi compatibility and does not establish that the provider rejected the request or language. Remote completion/charges after client cancellation cannot be determined from this result. No retry, repeated audition, Gemini evaluation or substitute-provider call was made. The local gate remains off; physical voice quality remains unverified. Any further paid attempt requires a separately approved scope.
 
 ## 4. English regression
 
@@ -41,7 +43,7 @@ S8 is now in the ten-persona harness. `npm run eval -- --persona S8 --runs 1 --p
 
 F1 is reported separately. `npm run eval -- --scenario followup --fake` passed with no failures and zero external calls. It seeds a synthetic S1 plan through the real UI commitment guard, then runs the full Day-7 conversation. Result: `get_followup_status` and `commit_action_plan`; all five review phases; Partial/Done/Done; one audit and one new accepted plan; original unchanged. Private trace: `.data/evals/F1-BXtiLG/F1.json`.
 
-The optional F1 live preflight passed: four Gemini text requests, conservative maximum sixteen HTTP attempts, 150,000 reserved-token cap, four logical-request cap, primary-only estimate US$0.015. No Sarvam requests or live evaluation were made. Reports record configured/actual models, language, prompt version, tools, phases, statuses and ledger changes. Private traces stay ignored.
+The optional F1 live preflight passed: four Gemini text requests, conservative maximum sixteen HTTP attempts, 150,000 reserved-token cap, four logical-request cap, primary-only estimate US$0.015. Those F1 preflight/fake runs made no Sarvam requests or live evaluation. Reports record configured/actual models, language, prompt version, tools, phases, statuses and ledger changes. Private traces stay ignored.
 
 ## 6. Follow-up session and data mapping
 
@@ -93,19 +95,20 @@ Keyless standalone server on loopback 4200; provider keys empty; browser routing
 
 ## 11. Commands and results
 
-| Command/check                                         | Result                                                           |
-| ----------------------------------------------------- | ---------------------------------------------------------------- |
-| `npm run lint`                                        | Passed; ESLint strict and Prettier                               |
-| `npm run typecheck`                                   | Passed; strict TypeScript                                        |
-| `npm test`                                            | 375 tests in 68 files passed after the final Hindi audit guard   |
-| `npm run verify-data`                                 | 46/46 invariants passed                                          |
-| `npm run build`                                       | Passed; final source revision includes mapped-only current stock |
-| `npm run test:browser`                                | 10/10 passed                                                     |
-| `docker build --progress=plain -t seller-saathi:p7 .` | Passed, Linux amd64; no P7 ARM runtime claim                     |
-| S8/F1 paid preflights                                 | Passed, zero live requests                                       |
-| F1 fake CLI                                           | Passed, zero failures                                            |
-| Source/history/client secret scan                     | Passed; no configured secret value found                         |
-| Exported Docker image secret scan                     | Passed; no configured secret value found                         |
+| Command/check                                         | Result                                                            |
+| ----------------------------------------------------- | ----------------------------------------------------------------- |
+| `npm run lint`                                        | Passed; ESLint strict and Prettier                                |
+| `npm run typecheck`                                   | Passed; strict TypeScript                                         |
+| `npm test`                                            | 375 tests in 68 files passed after the final Hindi audit guard    |
+| `npm run verify-data`                                 | 46/46 invariants passed                                           |
+| `npm run build`                                       | Passed; final source revision includes mapped-only current stock  |
+| `npm run test:browser`                                | 10/10 passed                                                      |
+| `docker build --progress=plain -t seller-saathi:p7 .` | Passed, Linux amd64; no P7 ARM runtime claim                      |
+| S8/F1 paid preflights                                 | Passed, zero live requests                                        |
+| F1 fake CLI                                           | Passed, zero failures                                             |
+| `npm run smoke:sarvam -- --hinglish --confirm-spend`  | Failed: one TTS timeout at a 6,000 ms deadline; zero STT requests |
+| Source/history/client secret scan                     | Passed; no configured secret value found                          |
+| Exported Docker image secret scan                     | Passed; no configured secret value found                          |
 
 One full test run under simultaneous builds/browser work hit the unchanged five-second S8 test timeout; an isolated rerun and later full suites passed without increasing that timeout. The first language browser test used an incorrect “again” selector for an unsaved ended call; the test now uses the actual Call button. No production guard was weakened to fix these checks. No new dependency was added.
 
@@ -113,7 +116,7 @@ The final Linux amd64 image is `sha256:e092ec3bea793256c285df26c6f90e72060d020a2
 
 ## 12. Physical voice checklist
 
-All physical items below are **not tried in P7**. First approve/run the bounded Hindi smoke and enable the verified profile privately, then restart the app. Use the actual SellerSaathi localhost port or HTTPS origin; port 3000 on this machine currently belongs to another application. Automated synthetic audio cannot certify pronunciation or microphone recognition.
+All physical items below are **not tried in P7**. The approved Hindi smoke failed; keep the language gate off until a separately approved technical verification succeeds. Then enable the verified profile privately and restart the app. Use the actual SellerSaathi localhost port or HTTPS origin; port 3000 on this machine currently belongs to another application. Automated synthetic audio cannot certify pronunciation or microphone recognition.
 
 1. [ ] Start a Hindi/Hinglish call and hear its AI greeting.
 2. [ ] Say “Meri sale gir gayi hai.”
@@ -134,14 +137,14 @@ Repeat relevant speaking/listening checks with laptop speakers and headphones. N
 
 ## 13. Limitations and preserved release gates
 
-Roman Hinglish synthesis and code-mixed recognition are implemented but not live-verified here. Official native-script pronunciation guidance does not establish Roman output quality. Browser Hindi fallback needs an installed Hindi voice; otherwise text remains available. Speech guards favor conservative supported wording and cannot establish naturalness by themselves.
+Roman Hinglish synthesis and code-mixed recognition are implemented, but the one approved live attempt timed out during synthesis, leaving verification inconclusive. Official native-script pronunciation guidance does not establish Roman output quality. Browser Hindi fallback needs an installed Hindi voice; otherwise text remains available. Speech guards favor conservative supported wording and cannot establish naturalness by themselves.
 
 The corrected P5 simulator S1 rerun is still pending after its 0/1 pilot. Full paid persona evaluation (now ten × three), twenty-turn benchmark, remaining fixture recordings, public-India latency and physical QA are pending. The P5 one-turn HTTP first-audio baseline remains **13.93 seconds**; no improvement or p50 target pass is claimed. P3's **11.77-second** Chrome median used a different boundary. `COMPACT_TOOL_HISTORY=false` remains unchanged. P6 public proxy/IP trust, cloud/reboot checks and native ARM host health/capacity remain deployment acceptance work. No P5/P6 limitation was closed by this feature work.
 
 ## 14. Git verification
 
-Started from clean `main`, 56 commits, `f485f8d`, preserving all previous commits. The verified code checkpoint is `main`, 64 commits, latest `2a96ef9` (`fix: preserve conditional Hindi audit evidence without false completion`). The documentation/report commit adds one more, bringing the final count to 65; its hash and clean-tree check are recorded in the final response. The final report commit is described in the final response rather than attempting to embed its own self-referential hash. Source changes were reviewed/staged explicitly in logical commits; private env, audio, traces, build outputs and temporary files remain ignored. No reset, clean, rebase, amend or history rewrite was used.
+Started from clean `main`, 56 commits, `f485f8d`, preserving all previous commits. The verified code checkpoint is `main`, 64 commits, latest `2a96ef9` (`fix: preserve conditional Hindi audit evidence without false completion`). The initial report commit was `b073fca`, bringing the count to 65 with a clean tree. The later approved smoke changes only its recorded evidence; that documentation commit brings the count to 66. Its hash and final clean-tree check are recorded in the final response rather than attempting to embed a self-referential hash. Source changes were reviewed/staged explicitly in logical commits; private env, audio, traces, build outputs and temporary files remain ignored. No reset, clean, rebase, amend or history rewrite was used.
 
 ## 15. Scope and open work
 
-Exactly P7 language support and simulated follow-up were implemented. No new dependency, database, real Snapdeal API, authentication, telephony, agent framework, cloud infrastructure or P8 feature was added. Nothing was pushed and **no AWS resources were created**. Existing unrelated services/containers were left alone. Remaining work requires the requested fresh Hindi-smoke approval, optional separately approved live S8/F1 evaluations and the user's physical checklist; none is reported as passed.
+Exactly P7 language support and simulated follow-up were implemented. No new dependency, database, real Snapdeal API, authentication, telephony, agent framework, cloud infrastructure or P8 feature was added. Nothing was pushed and **no AWS resources were created**. Existing unrelated services/containers were left alone. The two-request Hindi smoke approval was used for one failed TTS attempt and no STT request, with no automatic retry. Remaining work is a separately approved Hindi verification attempt, optional separately approved live S8/F1 evaluations and the user's physical checklist; none is reported as passed.
