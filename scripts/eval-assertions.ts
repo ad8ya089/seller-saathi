@@ -11,6 +11,7 @@ import { spokenEvidence } from '@/lib/agent/snapshot';
 import { spokenActionTitles, planSummary } from '@/lib/domain/plan-speech';
 import { QUESTION_BANK } from '@/lib/domain/questions';
 import { normalizeEvidence, verifiedAcceptance } from '@/lib/agent/guards';
+import { questionText } from '@/lib/domain/call-language';
 
 export interface EvalTurn {
   seller: string;
@@ -40,16 +41,19 @@ export function assertions(
   const all = speeches.join(' ');
   const approvedNumbers = [
     ...spokenEvidence(session, data),
-    ...Object.values(QUESTION_BANK).map((question) => question.text),
+    ...Object.keys(QUESTION_BANK).map((id) =>
+      questionText(id as keyof typeof QUESTION_BANK, session.lang, data),
+    ),
     ...(session.proposedPlan
-      ? spokenActionTitles(session.proposedPlan.plan)
+      ? spokenActionTitles(session.proposedPlan.plan, session.lang)
       : []),
     ...records.flatMap((record) => [
-      ...spokenActionTitles(record.plan),
+      ...spokenActionTitles(record.plan, session.lang),
       planSummary(
         record.plan,
         session.hypotheses[0]?.id,
         record.acceptedActionIds,
+        session.lang,
       ),
     ]),
   ].map(normalizeEvidence);
@@ -139,7 +143,7 @@ export function assertions(
     check(
       turns.some(
         (turn) =>
-          verifiedAcceptance(turn.seller, turn.seller) &&
+          verifiedAcceptance(turn.seller, turn.seller, session.lang) &&
           turn.before === 'confirm',
       ),
       'Ledger write without later explicit acceptance',
@@ -149,7 +153,7 @@ export function assertions(
     records.length === (session.committedPlan ? 1 : 0),
     'Ledger does not match session commitment',
   );
-  if (persona === 'S1') {
+  if (persona === 'S1' || persona === 'S8') {
     const first = turns[0]?.events ?? [];
     const question = first.findIndex(
       (event) => event.event === 'sentence' && event.data.text.includes('?'),
@@ -178,10 +182,36 @@ export function assertions(
       'S1 wrong plan',
     );
     check(
-      records.length === 1 && /seven days/i.test(all),
+      records.length === 1 &&
+        (persona === 'S8' ? /seven din/i : /seven days/i).test(all),
       'S1 missing explicit commit/seven-day summary',
     );
     check(!ids.includes('A_PRICE_CHECK'), 'S1 price action');
+  }
+  if (persona === 'S8') {
+    check(session.lang === 'hi-IN', 'S8 wrong session language');
+    check(
+      speeches
+        .filter(Boolean)
+        .every((text) =>
+          /\b(aap|hai|hain|kijiye|mein|kar|ki|ke|din)\b/i.test(text),
+        ),
+      'S8 switched to English-only speech',
+    );
+    check(
+      session.facts.restock_eta_days?.value === 10,
+      'S8 missing validated ETA',
+    );
+    check(
+      Object.values(session.facts).every((fact) =>
+        turns.some((turn) =>
+          normalizeEvidence(turn.seller).includes(
+            normalizeEvidence(fact.quote),
+          ),
+        ),
+      ),
+      'S8 lost literal fact evidence',
+    );
   }
   if (persona === 'S2') {
     check(

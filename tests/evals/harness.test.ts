@@ -22,7 +22,7 @@ describe('live harness controls, tested without providers', () => {
     }).not.toThrow();
     expect(option('--persona', undefined, ['--persona=S1'])).toBe('S1');
   });
-  it('has exactly nine supported personas and a transparent twenty-seven-run scope', () => {
+  it('has ten personas including Hinglish, with the full thirty-run scope kept separate from pilots', () => {
     expect(Object.keys(PERSONAS)).toEqual([
       'S1',
       'S2',
@@ -31,10 +31,11 @@ describe('live harness controls, tested without providers', () => {
       'S5',
       'S6',
       'S7',
+      'S8',
       'S9',
       'S10',
     ]);
-    expect(Object.keys(PERSONAS).length * 3).toBe(27);
+    expect(Object.keys(PERSONAS).length * 3).toBe(30);
   });
   it('refuses token reservations before invoking a provider', async () => {
     const llm = new FakeLlm([{ text: ['Hello.'] }]);

@@ -7,6 +7,7 @@ export function validateArgs(
   args = process.argv.slice(2),
 ): void {
   const booleans = new Set([
+    '--fake',
     '--confirm-spend',
     '--preflight',
     '--generate-fixtures',

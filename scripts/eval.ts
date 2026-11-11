@@ -21,6 +21,11 @@ import { indiaDay } from '@/lib/server/rate-limit';
 import { AppError } from '@/lib/errors';
 
 async function main(): Promise<void> {
+  if (option('--scenario') === 'followup') {
+    const { followupEvaluation } = await import('./eval-followup');
+    await followupEvaluation();
+    return;
+  }
   validateArgs([
     '--persona',
     '--runs',
@@ -36,7 +41,7 @@ async function main(): Promise<void> {
   if (selected && !Object.hasOwn(PERSONAS, selected))
     throw new AppError(
       'INVALID_INPUT',
-      'Use S1–S7, S9 or S10. S8 is deferred to P7.',
+      'Use S1–S10, or --scenario followup for the separate Day-7 evaluation.',
     );
   const personas = selected
     ? [selected as Persona]
@@ -72,7 +77,8 @@ async function main(): Promise<void> {
         ),
         estimateLimit:
           'Planning estimate, primary-only successful requests; fallback/retry/simulator variability excluded. Conservative token reservations and request cap bound the live run.',
-        gate: '25/27 interim; original 27/30 remains pending S8 in P7',
+        gate: 'Full 27/30 release gate requires all ten personas, three runs each. A pilot is not a release gate.',
+        language: selected === 'S8' ? 'hi-IN' : 'en-IN (S8 hi-IN)',
       },
       null,
       2,
@@ -100,7 +106,9 @@ async function main(): Promise<void> {
       for (let repetition = 1; repetition <= runs; repetition += 1) {
         const ledgerDir = join(directory, `${persona}-${String(repetition)}`);
         const store = new SessionStore();
-        const session = store.create();
+        const session = store.create({
+          lang: persona === 'S8' ? 'hi-IN' : 'en-IN',
+        });
         const llm = budget.provider(
           new Gemini({ ...config.gemini, model }),
           config.gemini.maxOutputTokens,
@@ -230,6 +238,7 @@ async function main(): Promise<void> {
           JSON.stringify(
             {
               persona,
+              language: session.lang,
               repetition,
               configuredModel: model,
               simulatorModel,
@@ -268,7 +277,8 @@ async function main(): Promise<void> {
       failures: results.filter((run) => !run.pass).length,
       percentage: results.length ? (100 * passes) / results.length : null,
       interimGate: planned === 27 && results.length === 27 && passes >= 25,
-      originalReleaseGate: 'Pending S8/P7; 27/30 not claimed',
+      originalReleaseGate:
+        planned === 30 && results.length === 30 && passes >= 27,
       budget,
       model,
       simulatorModel,
@@ -283,7 +293,11 @@ async function main(): Promise<void> {
     console.log(`Evaluation summary: ${directory}`);
     if (
       results.length !== planned ||
-      (planned === 27 ? passes < 25 : results.some((run) => !run.pass))
+      (planned === 30
+        ? passes < 27
+        : planned === 27
+          ? passes < 25
+          : results.some((run) => !run.pass))
     )
       process.exitCode = 1;
   }
