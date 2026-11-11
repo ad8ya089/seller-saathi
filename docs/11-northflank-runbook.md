@@ -1,5 +1,33 @@
 # 11 — Northflank Sandbox manual runbook
 
+## Account-specific free-region correction
+
+The operator reports that this account's Free team dashboard permits only
+**Europe West / London (`europe-west`)** and **US Central / Council Bluffs
+(`us-central`)**. Europe West is the recommended free-region candidate.
+Delhi (`asia-south-delhi`) and the other Asia-Pacific regions display a requirement
+to upgrade to pay as you go under this account. Do not upgrade to select Delhi.
+These are operator-observed account UI findings, not a claim that every account
+has the same regional entitlement.
+
+For users in India, London is expected to add network round-trip delay compared
+with a nearby India region. Voice turns involve sequential browser/server and
+server/provider requests, so the audible effect depends on routing and provider
+locations. No numeric latency increase or first-audio result has been measured;
+verify actual public voice/SSE behavior from India before claiming performance.
+
+Before creating the service, independently verify that **nf-compute-50
+(0.5 vCPU / 1 GB)** is available to this Sandbox account and included in its
+remaining allowance. The advertised **$20 allowance** and **$12 plan price** alone
+do not establish account-level eligibility or guarantee no charges. Existing stop
+conditions for declined cards, paid upgrades, unclear billing, unexpected costs
+and overages remain in force.
+
+The starting local revision for this correction is `c0260c5`. The current reviewed
+local commit, including this correction, must be published to GitHub before
+Northflank can build it from `main`. Publication requires separate explicit push
+approval; nothing is pushed or connected by this documentation change.
+
 Current **candidate**, checked against official documentation on 2026-11-11.
 No account, payment method, platform resource, deployment, push or paid provider
 call was made during preparation. The operator performs every dashboard action.
@@ -35,7 +63,7 @@ build costs, overage behavior and the total projected usage in your account firs
 3. Authorize the GitHub integration for **only `ad8ya089/seller-saathi`**, rather
    than every repository. Do not put GitHub tokens in variables or Docker arguments.
 4. Following [Create a project](https://northflank.com/docs/v1/application/getting-started/create-a-project),
-   create **`seller-saathi-demo`** in **Asia South Delhi (`asia-south-delhi`)**.
+   create **`seller-saathi-demo`** in **Europe West / London (`europe-west`)**.
    Confirm the region before creation; it cannot be changed afterward.
 5. Following [Build and deploy](https://northflank.com/docs/v1/application/getting-started/build-and-deploy-your-code),
    choose **one combined service** named `seller-saathi`, repository above, branch
@@ -179,7 +207,7 @@ Public acceptance checklist (the operator performs real voice/provider steps):
   Logs must contain no keys, secret values or raw seller transcripts.
 - Record actual first-audio boundary/sample count/p50/p95 separately from functional
   acceptance. No 3.7-second deployment threshold is asserted. Real call peak RAM,
-  Delhi latency and platform streaming remain unverified until this smoke.
+  Europe West latency from India and platform streaming remain unverified until this smoke.
 
 ## Hard stops and teardown
 

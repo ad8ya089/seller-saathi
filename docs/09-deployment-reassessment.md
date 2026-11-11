@@ -1,5 +1,33 @@
 # 09 — Deployment reassessment
 
+## Account-specific free-region correction
+
+The operator reports that this account's Free team dashboard permits only
+**Europe West / London (`europe-west`)** and **US Central / Council Bluffs
+(`us-central`)**. Europe West is the recommended free-region candidate.
+Delhi (`asia-south-delhi`) and the other Asia-Pacific regions display a requirement
+to upgrade to pay as you go under this account. Do not upgrade to select Delhi.
+These are operator-observed account UI findings, not a claim that every account
+has the same regional entitlement.
+
+For users in India, London is expected to add network round-trip delay compared
+with a nearby India region. Voice turns involve sequential browser/server and
+server/provider requests, so the audible effect depends on routing and provider
+locations. No numeric latency increase or first-audio result has been measured;
+verify actual public voice/SSE behavior from India before claiming performance.
+
+Before creating the service, independently verify that **nf-compute-50
+(0.5 vCPU / 1 GB)** is available to this Sandbox account and included in its
+remaining allowance. The advertised **$20 allowance** and **$12 plan price** alone
+do not establish account-level eligibility or guarantee no charges. Existing stop
+conditions for declined cards, paid upgrades, unclear billing, unexpected costs
+and overages remain in force.
+
+The starting local revision for this correction is `c0260c5`. The current reviewed
+local commit, including this correction, must be published to GitHub before
+Northflank can build it from `main`. Publication requires separate explicit push
+approval; nothing is pushed or connected by this documentation change.
+
 ## Current candidate — Northflank Sandbox
 
 The operator selected Northflank on 2026-11-11 because the available Google billing
@@ -9,7 +37,7 @@ before resources. Northflank's pricing and billing documentation disagree on car
 the actual account UI must settle that eligibility decision, not an assumption.
 No platform resource or deployment has been created or claimed here.
 
-Target: Northflank Cloud, `seller-saathi-demo`, `asia-south-delhi`, one combined
+Target: Northflank Cloud, `seller-saathi-demo`, `europe-west`, one combined
 GitHub/Dockerfile service, one replica, `nf-compute-50` (0.5 vCPU / 1 GB) only within
 the verified Sandbox allowance, public HTTP 8080 with generated HTTPS, no volumes
 or addons. Keep the existing conservative proxy mode and configure `DOMAIN`;

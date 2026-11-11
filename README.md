@@ -1,5 +1,33 @@
 # SellerSaathi — Snapdeal Virtual KAM
 
+## Account-specific free-region correction
+
+The operator reports that this account's Free team dashboard permits only
+**Europe West / London (`europe-west`)** and **US Central / Council Bluffs
+(`us-central`)**. Europe West is the recommended free-region candidate.
+Delhi (`asia-south-delhi`) and the other Asia-Pacific regions display a requirement
+to upgrade to pay as you go under this account. Do not upgrade to select Delhi.
+These are operator-observed account UI findings, not a claim that every account
+has the same regional entitlement.
+
+For users in India, London is expected to add network round-trip delay compared
+with a nearby India region. Voice turns involve sequential browser/server and
+server/provider requests, so the audible effect depends on routing and provider
+locations. No numeric latency increase or first-audio result has been measured;
+verify actual public voice/SSE behavior from India before claiming performance.
+
+Before creating the service, independently verify that **nf-compute-50
+(0.5 vCPU / 1 GB)** is available to this Sandbox account and included in its
+remaining allowance. The advertised **$20 allowance** and **$12 plan price** alone
+do not establish account-level eligibility or guarantee no charges. Existing stop
+conditions for declined cards, paid upgrades, unclear billing, unexpected costs
+and overages remain in force.
+
+The starting local revision for this correction is `c0260c5`. The current reviewed
+local commit, including this correction, must be published to GitHub before
+Northflank can build it from `main`. Publication requires separate explicit push
+approval; nothing is pushed or connected by this documentation change.
+
 ## Implementation status — P7 language and simulated Day-7 review
 
 SellerSaathi runs the seller recovery conversation: local Silero VAD → WAV → Sarvam STT → Gemini function calls → guarded deterministic domain tools → sentence-streamed Sarvam TTS → Web Audio. The responsive dashboard pairs that conversation with Snapshot, Diagnosis and Recovery Plan tabs. Metrics, evidence, confidence, seller statements and commitments update from server data. Server sessions enforce phases, three investigation questions, eligible plans and explicit acceptance before a JSONL commitment. All seller data is mock data; saved plans do not change Snapdeal systems.
@@ -26,7 +54,7 @@ Production locally: `npm run build`, then `npm start`. Startup copies static ass
 
 After `npm run build`, run `npm run test:browser` for the dashboard and P5 interruption Chrome suite. It starts a separate standalone server on port 4200 with provider keys empty and mocks requests in Playwright only. It requires Google Chrome installed. Production has no fake-provider activation path. Screenshots, accessibility scores and the P4 verification details are in the [P4 report](docs/p4-report.md).
 
-The current hosting candidate is **Northflank Sandbox in Delhi (`asia-south-delhi`)**, subject to actual account, card and free-allowance eligibility. Follow the [Northflank runbook](docs/11-northflank-runbook.md), [reassessment](docs/09-deployment-reassessment.md) and [local results](docs/p6-northflank-report.md). The advertised no-card signup conflicts with the billing documentation's payment-method requirement: verify the account UI before creating resources and stop if payment is requested but declined. The allowance is not unlimited usage or a guaranteed spending cap. Provider charges are separate.
+The current hosting candidate is **Northflank Sandbox in Europe West / London (`europe-west`)**, subject to actual account, card and free-allowance eligibility. Follow the [Northflank runbook](docs/11-northflank-runbook.md), [reassessment](docs/09-deployment-reassessment.md) and [local results](docs/p6-northflank-report.md). The advertised no-card signup conflicts with the billing documentation's payment-method requirement: verify the account UI before creating resources and stop if payment is requested but declined. The allowance is not unlimited usage or a guaranteed spending cap. Provider charges are separate.
 
 Cloud Run is superseded because the available Google billing account requires a ₹1,000 prepayment; do not continue GCP setup. Roster Sync is off-limits. Use one combined GitHub/Dockerfile service, one replica, 0.5 vCPU / 1 GB only if allowed by Sandbox, container port 8080, generated HTTPS and no persistent volume/addon. Configure the exact generated `DOMAIN` and conservative `PROXY_MODE=caddy` without a proxy token. Sessions, limits and the **temporary demo ledger** can disappear on restart. The source revision must be explicitly pushed before Northflank's GitHub integration can build it; no push or cloud deployment was performed here. Local Compose remains the fallback. Outstanding P5 measurements remain open.
 
@@ -76,23 +104,26 @@ F1 is a separate Day-7 evaluation, seeded by a guarded synthetic S1 commitment. 
 The cost/infra figures in the original design pack below are historical planning inputs. Current model-specific price units, verification dates and measurement limits are recorded in the P5 report.
 
 ## Files
-| File | Purpose |
-|---|---|
-| `AGENTS.md` | Rules Codex follows in the repo (conventions, commands, hard constraints) |
-| `prompt.md` | Step 0 + 8 ordered Codex prompts with acceptance checks and a 24 h plan |
-| `docs/01-problem-analysis.md` | Brief vs email requirements, data maths, hypotheses, assumptions A1–A10 |
+
+| File                                         | Purpose                                                                                          |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `AGENTS.md`                                  | Rules Codex follows in the repo (conventions, commands, hard constraints)                        |
+| `prompt.md`                                  | Step 0 + 8 ordered Codex prompts with acceptance checks and a 24 h plan                          |
+| `docs/01-problem-analysis.md`                | Brief vs email requirements, data maths, hypotheses, assumptions A1–A10                          |
 | `docs/02-product-and-conversation-design.md` | State machine, diagnosis rules, question bank, action catalog, system prompt, UI, demo narrative |
-| `docs/03-architecture.md` | Components, turn pipeline, API/SSE contracts, tools & guards, chunker, failure matrix, security |
-| `docs/04-tech-decisions.md` | Decisions with rejected options, cost model, references |
-| `docs/05-data-spec.md` | Exact mock data, invariants, 10 test personas |
-| `docs/06-deployment.md` | AWS EC2 + Docker + Caddy + DuckDNS: files, runbook, checklist |
-| `docs/07-test-and-eval-plan.md` | Test pyramid, persona evals, latency bench, voice QA, release gate |
-| `docs/08-submission-pack.md` | Email, one-page note, recording script, interview Q&A |
+| `docs/03-architecture.md`                    | Components, turn pipeline, API/SSE contracts, tools & guards, chunker, failure matrix, security  |
+| `docs/04-tech-decisions.md`                  | Decisions with rejected options, cost model, references                                          |
+| `docs/05-data-spec.md`                       | Exact mock data, invariants, 10 test personas                                                    |
+| `docs/06-deployment.md`                      | AWS EC2 + Docker + Caddy + DuckDNS: files, runbook, checklist                                    |
+| `docs/07-test-and-eval-plan.md`              | Test pyramid, persona evals, latency bench, voice QA, release gate                               |
+| `docs/08-submission-pack.md`                 | Email, one-page note, recording script, interview Q&A                                            |
 
 ## Decisions (defended in docs/04)
+
 Cascaded voice pipeline · Sarvam Saaras STT + Bulbul TTS · Gemini 3.5 Flash-Lite with tools · deterministic TypeScript diagnosis engine · one Next.js service, in-memory sessions + JSONL ledger · hands-free VAD, sentence-streamed TTS, barge-in · EC2 t4g.small Mumbai + Caddy + DuckDNS · ≈ ₹6–7 per 4-minute call · ≈ $13.5/month infra.
 
 ## What I changed from the earlier plan (and why)
+
 1. **Deadline:** brief says **24 h**, email says 48 h → plan for 24 h.
 2. **LLM:** `gemini-2.5-flash-lite` → **`gemini-3.5-flash-lite`** (current, GA 21 Jul 2026), fallback `gemini-3.6-flash`; the 2.5 family is being retired/rerouted (1 Dec 2026), and preview TTS/live IDs already have shutdown dates. Model IDs are env-configured.
 3. **Sarvam pricing corrected:** TTS is ₹30 per 10K chars (₹3/1K), not ₹1/1K; STT ₹30/hour. Per-call cost ≈ ₹6–7 (was ₹3.5–4.5).
@@ -105,6 +136,7 @@ Cascaded voice pipeline · Sarvam Saaras STT + Bulbul TTS · Gemini 3.5 Flash-Li
 10. **Cut:** Seller Health Score, localStorage sessions, WebSocket stack, anything multi-seller.
 
 ## Verification status and remaining checks
+
 - Gemini minimal thinking and signed tool continuation passed the live P3 smoke; the final S1 run also used the configured fallback successfully. See `docs/provider-notes.md`.
 - P2 manual Chrome testing was reported complete in the P3 brief. The P3 Chrome run supplied three completed voice turns and a saved-plan screen; see the P3 report for the exact evidence and listening limits.
 - Sarvam free credits (docs say ₹100; one page says ₹1,000) → dashboard.
@@ -113,4 +145,5 @@ Cascaded voice pipeline · Sarvam Saaras STT + Bulbul TTS · Gemini 3.5 Flash-Li
 - Brief's "1–2 hours expected effort" vs this scope: the core path (P1–P3 + minimal UI) already satisfies the brief; everything after is differentiation. Don't let it threaten the deadline.
 
 ## Start
+
 P1–P7 are local, with P6 limited to deployment preparation. Paid P5 runs were limited to pilots at the user's request: the full persona gate, 20-turn benchmark and remaining recordings are pending. The approved S1 simulator pilot failed (0/1); its explicit-consent rejection was fixed offline and awaits a live rerun. The separate scripted S1 baseline passed. Physical speaker/headphone and language QA are unverified. Deployment packaging and P7 do not satisfy those release gates. No P8 work is included.
