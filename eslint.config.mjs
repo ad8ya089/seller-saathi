@@ -21,6 +21,7 @@ export default defineConfig([
   },
   prettier,
   globalIgnores([
+    '.tmp/**',
     '.next/**',
     'node_modules/**',
     'next-env.d.ts',
