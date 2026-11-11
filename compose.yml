@@ -1,0 +1,39 @@
+name: seller-saathi
+services:
+  app:
+    image: seller-saathi:local
+    build:
+      context: .
+      target: runtime
+    env_file:
+      - ${APP_ENV_FILE:-.env}
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      HOSTNAME: 0.0.0.0
+      DATA_DIR: /data
+      MOCK_DATA_DIR: /app/data
+      NODE_OPTIONS: --max-old-space-size=384
+    ports:
+      - '127.0.0.1:${APP_PORT:-3000}:3000'
+    volumes:
+      - kamdata:/data
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 700m
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: [CMD, node, scripts/healthcheck.mjs]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+volumes:
+  kamdata:
