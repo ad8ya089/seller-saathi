@@ -1,6 +1,6 @@
 # SellerSaathi — Snapdeal Virtual KAM
 
-## Implementation status — P5 hardening and pilot measurements
+## Implementation status — P6 deployment preparation
 
 SellerSaathi runs the seller recovery conversation: local Silero VAD → WAV → Sarvam STT → Gemini function calls → guarded deterministic domain tools → sentence-streamed Sarvam TTS → Web Audio. The responsive dashboard pairs that conversation with Snapshot, Diagnosis and Recovery Plan tabs. Metrics, evidence, confidence, seller statements and commitments update from server data. Server sessions enforce phases, three investigation questions, eligible plans and explicit acceptance before a JSONL commitment. All seller data is mock data; saved plans do not change Snapdeal systems.
 
@@ -25,6 +25,16 @@ Production locally: `npm run build`, then `npm start`. Startup copies static ass
 `npm run chat` opens the real Gemini text REPL. `npm run chat -- --scenario S1` runs the scripted seller acceptance check without speech providers and writes its synthetic trace under ignored `.data/chat/`. `npm run smoke:gemini` verifies a small signed function-call round trip on the configured primary model; `-- --fallback` explicitly tests the configured fallback. Both commands use paid providers. Ordinary tests use fakes. `eval` and `bench` now provide bounded real-provider runners. They print preflight usage and require `--confirm-spend`; ordinary tests remain offline. See the [P3 report](docs/p3-report.md) for real-provider traces, measured latency and manual-check limits.
 
 After `npm run build`, run `npm run test:browser` for the dashboard and P5 interruption Chrome suite. It starts a separate standalone server on port 4200 with provider keys empty and mocks requests in Playwright only. It requires Google Chrome installed. Production has no fake-provider activation path. Screenshots, accessibility scores and the P4 verification details are in the [P4 report](docs/p4-report.md).
+
+P6 adds locally verified Docker/Compose packaging and an instance-only AWS preparation kit. Follow the [manual EC2 runbook](deploy/aws-ec2/README.md), [local Docker checks](tests/deployment/README.md) and [P6 results](docs/p6-report.md). No AWS resources were created and nothing was pushed. Deployment cannot fetch these local commits until a later user-approved push. The outstanding P5 release gates remain open.
+
+```sh
+# Fresh checkout only; preserve an existing .env.
+cp .env.example .env
+docker compose up --build -d --wait
+# App binds localhost:3000; set APP_PORT if already occupied.
+docker compose down # retains the ledger volume
+```
 
 See [P1 decisions](docs/p1-decisions.md) for resolved documentation conflicts and policy choices. The design pack below describes the complete planned application, including work beyond P1.
 
@@ -79,8 +89,8 @@ Cascaded voice pipeline · Sarvam Saaras STT + Bulbul TTS · Gemini 3.5 Flash-Li
 - P2 manual Chrome testing was reported complete in the P3 brief. The P3 Chrome run supplied three completed voice turns and a saved-plan screen; see the P3 report for the exact evidence and listening limits.
 - Sarvam free credits (docs say ₹100; one page says ₹1,000) → dashboard.
 - Papers cited in docs/04 were from the earlier research pass; re-read before quoting.
-- Deployment snippets in docs/06 are adapted, **untested**; P6 + your runbook verify them.
+- P6 Docker, Caddy and local HTTPS checks passed; AWS bootstrap, public source-IP trust and cloud/reboot acceptance await a separately approved deployment. See the P6 report.
 - Brief's "1–2 hours expected effort" vs this scope: the core path (P1–P3 + minimal UI) already satisfies the brief; everything after is differentiation. Don't let it threaten the deadline.
 
 ## Start
-P1–P4 and the P5 hardening/harness implementation are local. Paid runs were limited to pilots at the user's request: the full 27-run persona gate, 20-turn benchmark and remaining recordings are pending. The approved S1 simulator pilot failed (0/1); its explicit-consent rejection was fixed offline and awaits a live rerun. The separate scripted S1 baseline passed. Physical speaker/headphone QA is unverified. P6 has not started.
+P1–P6 are local, with P6 limited to deployment preparation. Paid P5 runs were limited to pilots at the user's request: the full 27-run persona gate, 20-turn benchmark and remaining recordings are pending. The approved S1 simulator pilot failed (0/1); its explicit-consent rejection was fixed offline and awaits a live rerun. The separate scripted S1 baseline passed. Physical speaker/headphone QA is unverified. Deployment packaging does not make the application production-ready. P7 has not started.
