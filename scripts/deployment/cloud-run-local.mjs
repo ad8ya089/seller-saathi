@@ -3,7 +3,17 @@ import { execFileSync } from 'node:child_process';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium } from '@playwright/test';
-const name = 'seller-saathi-cloudrun-p76';
+const profile = process.argv[3] ?? 'cloud-run';
+if (!['cloud-run', 'northflank'].includes(profile))
+  throw Error('Unknown local profile');
+const northflank = profile === 'northflank';
+const name = northflank
+  ? 'seller-saathi-northflank-preflight'
+  : 'seller-saathi-cloudrun-p76';
+const imageTag = northflank
+  ? 'seller-saathi:northflank'
+  : 'seller-saathi:cloudrun';
+const resultDir = northflank ? '.tmp/northflank' : '.tmp/cloud-run';
 const port = process.argv[2] ?? '8080';
 if (!['8080', '8082'].includes(port))
   throw Error('Use local host port 8080 or 8082');
@@ -21,7 +31,7 @@ try {
     '--memory',
     '1g',
     '--cpus',
-    '1',
+    northflank ? '0.5' : '1',
     '-p',
     `127.0.0.1:${port}:8080`,
     '-e',
@@ -29,14 +39,16 @@ try {
     '-e',
     'HOSTNAME=0.0.0.0',
     '-e',
-    'PROXY_MODE=cloud-run',
+    northflank ? 'PROXY_MODE=caddy' : 'PROXY_MODE=cloud-run',
+    '-e',
+    northflank ? 'DOMAIN=http--seller-saathi--synthetic.code.run' : 'DOMAIN=',
     '-e',
     'DAILY_TURN_CAP=50',
     '-e',
     'GEMINI_API_KEY=',
     '-e',
     'SARVAM_API_KEY=',
-    'seller-saathi:cloudrun',
+    imageTag,
   );
   created = true;
   docker('start', name);
@@ -161,11 +173,12 @@ try {
     image: docker(
       'image',
       'inspect',
-      'seller-saathi:cloudrun',
+      imageTag,
       '--format',
       '{{.Architecture}} {{.Size}}',
     ),
     bootToHttpMs,
+    profile,
     idleRssKiB: idle.VmRSS,
     observedServerHighWaterKiB: status().VmHWM,
     callPeakRss: 'not measured; no real provider call',
@@ -177,9 +190,9 @@ try {
     failedResources,
     external,
   };
-  await mkdir('.tmp/cloud-run', { recursive: true });
+  await mkdir(resultDir, { recursive: true });
   await writeFile(
-    '.tmp/cloud-run/local-result.json',
+    `${resultDir}/local-result.json`,
     JSON.stringify(result, null, 2),
   );
   console.log(JSON.stringify(result));

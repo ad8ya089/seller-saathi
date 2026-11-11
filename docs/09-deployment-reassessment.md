@@ -1,5 +1,29 @@
 # 09 — Deployment reassessment
 
+## Current candidate — Northflank Sandbox
+
+The operator selected Northflank on 2026-11-11 because the available Google billing
+account requires a ₹1,000 prepayment. **Do not continue GCP setup.** Use
+[docs/11](11-northflank-runbook.md) for manual account/card/allowance verification
+before resources. Northflank's pricing and billing documentation disagree on cards;
+the actual account UI must settle that eligibility decision, not an assumption.
+No platform resource or deployment has been created or claimed here.
+
+Target: Northflank Cloud, `seller-saathi-demo`, `asia-south-delhi`, one combined
+GitHub/Dockerfile service, one replica, `nf-compute-50` (0.5 vCPU / 1 GB) only within
+the verified Sandbox allowance, public HTTP 8080 with generated HTTPS, no volumes
+or addons. Keep the existing conservative proxy mode and configure `DOMAIN`;
+Cloud Run's XFF mode is not reused. Ledger/session/counter loss remains explicit.
+
+Sequence: local verification → review free eligibility and any card request →
+separately approved Git push → manual Northflank setup/secrets/deploy → real public
+SSE/voice/consent smoke → submission recording if passing, otherwise local fallback.
+No public success is claimed from keyless tests. Dedicated EC2 remains a separately
+reviewed fallback; all Roster Sync deployments are off-limits. The detailed current
+results and Git dependency are in [the Northflank report](p6-northflank-report.md).
+
+## Historical Cloud Run decision — superseded
+
 Selected on 2026-11-11: **Cloud Run, Mumbai (`asia-south1`), direct HTTPS `run.app` URL**.
 The existing Roster Sync EC2 is off-limits. Dedicated EC2 is a fallback only after
 a separate account-ownership, permissions and cost decision. Older EC2 instructions

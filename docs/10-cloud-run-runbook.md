@@ -1,5 +1,11 @@
 # 10 — Manual Cloud Run runbook
 
+**SUPERSEDED — not the active deployment path.** The operator's available Google
+billing account requires a ₹1,000 prepayment, so GCP setup is stopped. Use the
+[Northflank candidate runbook](11-northflank-runbook.md), subject to its account,
+card and allowance checks. The commands/details below are historical; do not run
+them as part of the current Northflank preparation.
+
 This is an optional operator procedure, **not executed by the coding task**.
 Use Windows PowerShell 5.1 from the repository root. No AWS, Roster Sync, DNS,
 Caddy, custom domain, load balancer, database or persistent storage is involved.
