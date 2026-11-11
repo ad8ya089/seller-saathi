@@ -8,6 +8,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 describe('GET /api/health', () => {
@@ -58,6 +59,18 @@ describe('GET /api/health', () => {
     expect(text).toContain('"sarvam":true');
     expect(text).not.toContain('health-test');
     expect(text).not.toContain('API_KEY');
+  });
+  it('does not call provider HTTP even when both provider flags are configured', async () => {
+    vi.stubEnv('GEMINI_API_KEY', 'health-test-gemini');
+    vi.stubEnv('SARVAM_API_KEY', 'health-test-sarvam');
+    const network = vi.fn(() => {
+      throw new Error('Provider I/O must not run in health');
+    });
+    vi.stubGlobal('fetch', network);
+    const { GET } = await import('@/app/api/health/route');
+    const response = GET(new Request('http://localhost/api/health'));
+    expect(response.status).toBe(200);
+    expect(network).not.toHaveBeenCalled();
   });
   it('returns a predictable sanitized 503 for invalid explicit configuration', async () => {
     vi.stubEnv('PORT', 'private-invalid-port');
