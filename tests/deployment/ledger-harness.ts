@@ -8,6 +8,10 @@ import { buildPlan } from '@/lib/domain/actions';
 import { domainState } from '@/lib/agent/session';
 import { spokenActionTitles, planSummary } from '@/lib/domain/plan-speech';
 import { fixture } from '../fixtures';
+import { FakeTts } from '@/lib/voice/fakes';
+import { wavFixture } from '../voice/fixtures';
+
+const directory = process.env.DATA_DIR ?? '/data';
 
 const store = new SessionStore();
 const session = store.create();
@@ -78,13 +82,14 @@ const llm = new FakeLlm([
 const service = new TurnService(store, () =>
   Promise.resolve({
     llm,
+    tts: new FakeTts(wavFixture({ sampleRate: 24000 })),
     tools: {
       data: fixture,
       today,
       now: () => today,
       createPlanId: () => planId,
       append: (record, signal) =>
-        appendPlan(record, '/data', { once: true, signal }),
+        appendPlan(record, directory, { once: true, signal }),
     },
   }),
 );
@@ -100,7 +105,7 @@ for (const text of [
     AbortSignal.timeout(10000),
   );
 }
-const records = await listLatest(100, '/data');
+const records = await listLatest(100, directory);
 if (
   session.phase !== 'done' ||
   records.filter((r) => r.plan.id === planId).length !== 1

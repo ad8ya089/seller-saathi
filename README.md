@@ -1,6 +1,12 @@
 # SellerSaathi — Snapdeal Virtual KAM
 
-## Account-specific free-region correction
+Current hosting candidate: [Render Free](docs/12-render-free-runbook.md), with
+no card or paid upgrade. See [local preflight evidence](docs/p7.7-render-preflight-report.md)
+before the operator creates a service. Earlier platform findings below are history.
+Readiness is conditional: direct HTTP checks passed, while Docker's built-in
+process probe timed out at 0.1 CPU. Public Render health and real voice remain unverified.
+
+## Historical Northflank account findings
 
 The operator reports that this account's Free team dashboard permits only
 **Europe West / London (`europe-west`)** and **US Central / Council Bluffs
@@ -54,9 +60,9 @@ Production locally: `npm run build`, then `npm start`. Startup copies static ass
 
 After `npm run build`, run `npm run test:browser` for the dashboard and P5 interruption Chrome suite. It starts a separate standalone server on port 4200 with provider keys empty and mocks requests in Playwright only. It requires Google Chrome installed. Production has no fake-provider activation path. Screenshots, accessibility scores and the P4 verification details are in the [P4 report](docs/p4-report.md).
 
-The current hosting candidate is **Northflank Sandbox in Europe West / London (`europe-west`)**, subject to actual account, card and free-allowance eligibility. Follow the [Northflank runbook](docs/11-northflank-runbook.md), [reassessment](docs/09-deployment-reassessment.md) and [local results](docs/p6-northflank-report.md). The advertised no-card signup conflicts with the billing documentation's payment-method requirement: verify the account UI before creating resources and stop if payment is requested but declined. The allowance is not unlimited usage or a guaranteed spending cap. Provider charges are separate.
+The current candidate is **Render Free**, Singapore only if offered on Free: one Docker Web Service, 512 MB/0.1 CPU, runtime port 10000, no card or paid upgrade. Follow the [Render runbook](docs/12-render-free-runbook.md) and [constrained report](docs/p7.7-render-preflight-report.md). Provider keys are entered manually only when the user chooses paid usage. Free hosting does not make Gemini/Sarvam free. Never bypass idle sleep with pings.
 
-Cloud Run is superseded because the available Google billing account requires a ₹1,000 prepayment; do not continue GCP setup. Roster Sync is off-limits. Use one combined GitHub/Dockerfile service, one replica, 0.5 vCPU / 1 GB only if allowed by Sandbox, container port 8080, generated HTTPS and no persistent volume/addon. Configure the exact generated `DOMAIN` and conservative `PROXY_MODE=caddy` without a proxy token. Sessions, limits and the **temporary demo ledger** can disappear on restart. The source revision must be explicitly pushed before Northflank's GitHub integration can build it; no push or cloud deployment was performed here. Local Compose remains the fallback. Outstanding P5 measurements remain open.
+The unchanged Dockerfile and local Compose remain available. Configure the exact generated `DOMAIN`, conservative `PROXY_MODE=caddy`, daily cap 50 and temporary `/tmp/kam` ledger. Sessions/data may disappear on sleep/restart/deploy. Keyless checks do not establish real-call peak memory. A failed constrained gate stops the attempt; consider laptop-hosted Tailscale Funnel separately. Earlier hosting plans are historical. Roster Sync remains off-limits. No push/deployment occurs here.
 
 ```sh
 # Fresh checkout only; preserve an existing .env.

@@ -1,6 +1,23 @@
 # 09 — Deployment reassessment
 
-## Account-specific free-region correction
+## Current candidate — Render Free (P7.7)
+
+On 2026-11-12 the operator selected a no-card Render Free attempt. Follow
+[docs/12](12-render-free-runbook.md) and [the constrained report](p7.7-render-preflight-report.md).
+One Free Docker Web Service, Singapore only if available on Free, 512 MB/0.1 CPU,
+PORT=10000, generated HTTPS, no disk/addons. Card/upgrade required means stop;
+another region requires user approval. No GCP/AWS/Northflank continuation or pings.
+Passing keyless tests does not establish real-call peak memory. Failed constrained
+checks mean stop and recommend the laptop Tailscale Funnel fallback separately.
+The local HTTP/browser/fake S1 checks passed, but Docker's built-in process probe
+remained unhealthy at 0.1 CPU. Treat this as conditional evidence, not a healthy
+public deployment; actual Render HTTP health must stay within five seconds.
+
+Sequence: local gate → separately approved publication of reviewed revision →
+operator no-card setup → real public voice/SSE/consent smoke → record while awake
+if passing; otherwise local Compose fallback. Earlier plans below are history.
+
+## Historical Northflank account-specific free-region correction
 
 The operator reports that this account's Free team dashboard permits only
 **Europe West / London (`europe-west`)** and **US Central / Council Bluffs
@@ -28,7 +45,7 @@ local commit, including this correction, must be published to GitHub before
 Northflank can build it from `main`. Publication requires separate explicit push
 approval; nothing is pushed or connected by this documentation change.
 
-## Current candidate — Northflank Sandbox
+## Historical candidate — Northflank Sandbox
 
 The operator selected Northflank on 2026-11-11 because the available Google billing
 account requires a ₹1,000 prepayment. **Do not continue GCP setup.** Use

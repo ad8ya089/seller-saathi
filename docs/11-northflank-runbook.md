@@ -1,5 +1,10 @@
 # 11 — Northflank Sandbox manual runbook
 
+**HISTORICAL / SUPERSEDED:** Render Free is the current no-card candidate; see
+[docs/12](12-render-free-runbook.md). Do not execute this alternative during P7.7.
+Northflank remains a card/payment-method-required alternative under its billing
+documentation; previous regional findings and card conflict are historical.
+
 ## Account-specific free-region correction
 
 The operator reports that this account's Free team dashboard permits only

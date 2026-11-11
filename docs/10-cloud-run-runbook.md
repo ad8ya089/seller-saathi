@@ -1,5 +1,10 @@
 # 10 — Manual Cloud Run runbook
 
+**HISTORICAL / SUPERSEDED:** Render Free is the current no-card candidate; see
+[docs/12](12-render-free-runbook.md). Do not execute this alternative during P7.7.
+Northflank remains a card/payment-method-required alternative under its billing
+documentation; previous regional findings and card conflict are historical.
+
 **SUPERSEDED — not the active deployment path.** The operator's available Google
 billing account requires a ₹1,000 prepayment, so GCP setup is stopped. Use the
 [Northflank candidate runbook](11-northflank-runbook.md), subject to its account,

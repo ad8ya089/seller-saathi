@@ -4,16 +4,26 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { chromium } from '@playwright/test';
 const profile = process.argv[3] ?? 'cloud-run';
-if (!['cloud-run', 'northflank'].includes(profile))
+if (!['cloud-run', 'northflank', 'render'].includes(profile))
   throw Error('Unknown local profile');
 const northflank = profile === 'northflank';
-const name = northflank
-  ? 'seller-saathi-northflank-preflight'
-  : 'seller-saathi-cloudrun-p76';
-const imageTag = northflank
-  ? 'seller-saathi:northflank'
-  : 'seller-saathi:cloudrun';
-const resultDir = northflank ? '.tmp/northflank' : '.tmp/cloud-run';
+const render = profile === 'render';
+const containerPort = render ? '10000' : '8080';
+const name = render
+  ? `seller-saathi-render-p77-${Date.now()}`
+  : northflank
+    ? 'seller-saathi-northflank-preflight'
+    : 'seller-saathi-cloudrun-p76';
+const imageTag = render
+  ? 'seller-saathi:render'
+  : northflank
+    ? 'seller-saathi:northflank'
+    : 'seller-saathi:cloudrun';
+const resultDir = render
+  ? '.tmp/render'
+  : northflank
+    ? '.tmp/northflank'
+    : '.tmp/cloud-run';
 const port = process.argv[2] ?? '8080';
 if (!['8080', '8082'].includes(port))
   throw Error('Use local host port 8080 or 8082');
@@ -21,27 +31,34 @@ const url = `http://localhost:${port}`;
 const docker = (...args) =>
   execFileSync('docker', args, { encoding: 'utf8' }).trim();
 let created = false;
+let containerId;
 let browser;
 try {
   const started = performance.now();
-  docker(
+  containerId = docker(
     'create',
     '--name',
     name,
     '--memory',
-    '1g',
+    render ? '512m' : '1g',
     '--cpus',
-    northflank ? '0.5' : '1',
+    render ? '0.1' : northflank ? '0.5' : '1',
     '-p',
-    `127.0.0.1:${port}:8080`,
+    `127.0.0.1:${port}:${containerPort}`,
     '-e',
-    'PORT=8080',
+    `PORT=${containerPort}`,
     '-e',
     'HOSTNAME=0.0.0.0',
     '-e',
-    northflank ? 'PROXY_MODE=caddy' : 'PROXY_MODE=cloud-run',
+    northflank || render ? 'PROXY_MODE=caddy' : 'PROXY_MODE=cloud-run',
     '-e',
-    northflank ? 'DOMAIN=http--seller-saathi--synthetic.code.run' : 'DOMAIN=',
+    render
+      ? 'DOMAIN=seller-saathi-synthetic.onrender.com'
+      : northflank
+        ? 'DOMAIN=http--seller-saathi--synthetic.code.run'
+        : 'DOMAIN=',
+    '-e',
+    'NODE_OPTIONS=--max-old-space-size=384',
     '-e',
     'DAILY_TURN_CAP=50',
     '-e',
@@ -53,7 +70,7 @@ try {
   created = true;
   docker('start', name);
   let health;
-  while (performance.now() - started < 60000) {
+  while (performance.now() - started < (render ? 300000 : 60000)) {
     try {
       const r = await fetch(`${url}/api/health`);
       if (r.ok) {
@@ -125,7 +142,7 @@ try {
       window.recordViolation(e.violatedDirective),
     ),
   );
-  const response = await page.goto(url);
+  const response = await page.goto(url, { timeout: render ? 120000 : 30000 });
   await page
     .getByRole('button', { name: 'Call Virtual KAM', exact: true })
     .waitFor();
@@ -169,7 +186,80 @@ try {
   ]) {
     if (!headers[key]) throw Error('Security header missing');
   }
+  const workingSet = docker(
+    'stats',
+    '--no-stream',
+    '--format',
+    '{{.MemUsage}}',
+    containerId,
+  );
+  const constraints = docker(
+    'inspect',
+    '--format',
+    '{{.HostConfig.Memory}} {{.HostConfig.NanoCpus}} {{.State.OOMKilled}} {{.RestartCount}}',
+    containerId,
+  );
+  if (render && constraints !== '536870912 100000000 false 0')
+    throw Error('Render CPU/memory constraints or state mismatch');
+  if (render) {
+    docker(
+      'cp',
+      '.tmp/p6/ledger-harness.mjs',
+      `${containerId}:/tmp/render-s1.mjs`,
+    );
+    docker('exec', containerId, 'node', '/tmp/render-s1.mjs');
+    docker('exec', containerId, 'node', '/tmp/render-s1.mjs');
+  }
+  const finalState = docker(
+    'inspect',
+    '--format',
+    '{{.State.OOMKilled}} {{.RestartCount}} {{.State.Status}}',
+    containerId,
+  );
+  if (render && finalState !== 'false 0 running')
+    throw Error('Constrained container did not remain healthy');
+  const warmHealth = [];
+  if (render) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const requested = performance.now();
+      const response = await fetch(`${url}/api/health`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) throw Error('Warm HTTP health failed');
+      warmHealth.push({
+        status: response.status,
+        ms: performance.now() - requested,
+      });
+    }
+  }
+  const dockerHealth = docker(
+    'inspect',
+    '--format',
+    '{{.State.Health.Status}}',
+    containerId,
+  );
+  const cpuStat = render
+    ? docker('exec', containerId, 'cat', '/sys/fs/cgroup/cpu.stat')
+    : 'not sampled';
+  const workingSetAfter = docker(
+    'stats',
+    '--no-stream',
+    '--format',
+    '{{.MemUsage}}',
+    containerId,
+  );
   const result = {
+    warmHealth,
+    dockerHealth,
+    fakeS1Runs: render ? 2 : 0,
+    workingSetAfter,
+    containerId,
+    constraints,
+    finalState,
+    workingSet,
+    cpuStat,
+    totalTestMs: performance.now() - started,
     image: docker(
       'image',
       'inspect',
@@ -198,5 +288,15 @@ try {
   console.log(JSON.stringify(result));
 } finally {
   await browser?.close();
-  if (created) docker('rm', '-f', name); // only the container this invocation created
+  if (created && render) {
+    await mkdir(resultDir, { recursive: true });
+    const safeState = docker(
+      'inspect',
+      '--format',
+      '{"status":{{json .State.Status}},"oom":{{.State.OOMKilled}},"exitCode":{{.State.ExitCode}},"restarts":{{.RestartCount}},"memory":{{.HostConfig.Memory}},"nanoCpus":{{.HostConfig.NanoCpus}}}',
+      containerId,
+    );
+    await writeFile(`${resultDir}/final-state.json`, safeState);
+  }
+  if (created) docker('rm', '-f', containerId); // exact ID created by this invocation
 }
