@@ -28,6 +28,8 @@ export const signalIdSchema = z.enum([
   'S_SKU_CONCENTRATION',
   'S_CANCEL_STOCK_DOMINANT',
   'S_CANCEL_DISPATCH_DOMINANT',
+  'S_REMAINING_OOS',
+  'S_PARTIAL_RESTOCK',
 ]);
 export type SignalId = z.infer<typeof signalIdSchema>;
 export const hypothesisSchema = z.enum([
@@ -148,6 +150,12 @@ export interface DomainState {
   facts: SellerFacts;
   questionsAsked: readonly QuestionId[];
   toolsCalled: ReadonlySet<DataTool>;
+  review?: {
+    remainingOos: number;
+    partialRestock: boolean;
+    stockSyncIncomplete: boolean;
+    completedActionIds: readonly SellerActionId[];
+  };
 }
 export interface InvestigationState {
   facts: SellerFacts;

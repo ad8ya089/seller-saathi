@@ -98,11 +98,17 @@ export const followupDataSchema = z.strictObject({
     oosProducts: count,
   }),
   baselineThisMonthOrdersPerDay: z.number().nonnegative(),
-  actionStatus: z.strictObject({
-    A_RESTOCK_TOP: z.enum(['partial', 'done', 'not_done']),
-    A_STOCK_SYNC: z.enum(['partial', 'done', 'not_done']),
-    A_PUSH_INSTOCK: z.enum(['partial', 'done', 'not_done']),
-  }),
+  actionStatus: z.partialRecord(
+    z.enum([
+      'A_RESTOCK_TOP',
+      'A_STOCK_SYNC',
+      'A_PUSH_INSTOCK',
+      'A_DISPATCH_SLA',
+      'A_VISIBILITY_AUDIT',
+      'A_PRICE_CHECK',
+    ]),
+    z.enum(['partial', 'done', 'not_done']),
+  ),
   skuStock: z.record(z.string().regex(/^[A-Z]{3}-\d{3}$/), count),
 });
 export type FollowupData = z.infer<typeof followupDataSchema>;

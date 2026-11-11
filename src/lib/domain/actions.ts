@@ -38,7 +38,11 @@ export function evaluateActions(
     return {
       id: action.id,
       title: action.title,
-      eligible: action.eligible(context) && feasibility > 0,
+      eligible:
+        action.eligible(context) &&
+        feasibility > 0 &&
+        (!state.review?.completedActionIds.includes(action.id) ||
+          (action.id === 'A_RESTOCK_TOP' && state.review.remainingOos > 0)),
       feasibility,
       rankScore:
         (context.scores.get(action.hypothesis) ?? 0) *

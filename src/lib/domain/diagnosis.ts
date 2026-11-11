@@ -19,6 +19,7 @@ export function computeDiagnosis(
   const computedSignals = signals(
     {
       seller: state.snapshot,
+      ...(state.review ? { review: state.review } : {}),
       ...(state.toolsCalled.has('get_sku_breakdown') && state.skus
         ? { skus: state.skus }
         : {}),

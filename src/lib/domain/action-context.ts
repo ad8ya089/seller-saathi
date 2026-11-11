@@ -34,6 +34,7 @@ export interface ActionContext {
   cancellations: CancellationMetrics | null;
   healthyHeroes: z.infer<typeof skuSchema>[];
   oosProducts: z.infer<typeof skuSchema>[];
+  review?: DomainState['review'];
 }
 
 export function actionContext(
@@ -48,6 +49,7 @@ export function actionContext(
     ? state.cancellations
     : undefined;
   return {
+    ...(state.review ? { review: state.review } : {}),
     scores: new Map(
       computeDiagnosis(state, thresholds, policy).hypotheses.map(
         (hypothesis) => [hypothesis.id, hypothesis.score],

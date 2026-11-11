@@ -48,8 +48,9 @@ export const ACTION_CATALOG: readonly ActionSpec[] = [
     impactWeight: 0.9,
     dueDays: 0,
     eligible: (context) =>
+      context.review?.stockSyncIncomplete === true ||
       (context.cancellations?.stockPct ?? 0) >=
-      ACTION_POLICY.stockSyncMinSharePct,
+        ACTION_POLICY.stockSyncMinSharePct,
     feasibility: fullFeasibility,
     successMetric: () =>
       `Stock-unavailable cancellations below ${String(ACTION_POLICY.weeklyStockCancelTarget)} per week.`,

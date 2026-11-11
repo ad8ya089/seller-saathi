@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { actionIdSchema } from '@/lib/domain/types';
+import { actionIdSchema, sellerFactsSchema } from '@/lib/domain/types';
 
 export const sellerActionIdSchema = actionIdSchema.exclude(['A_FOLLOWUP']);
 const parametersSchema = z.strictObject({
@@ -33,12 +33,31 @@ export const actionPlanSchema = z
     id: z.string().min(1),
     sellerId: z.string().min(1),
     createdDate: z.iso.date(),
-    actions: z.array(sellerPlanActionSchema).min(2).max(3),
+    actions: z.array(sellerPlanActionSchema).min(1).max(3),
     checkpoint: checkpointSchema,
     followUpDate: z.iso.date(),
-    recoveryCeiling: z.number().nonnegative(),
+    recoveryCeiling: z.number().nonnegative().nullable(),
     impact: z.string().min(1),
+    review: z
+      .strictObject({
+        parentPlanId: z.string().min(1),
+        runId: z.uuid(),
+        simulatedDate: z.iso.date(),
+      })
+      .optional(),
   })
+  .refine(
+    (plan) =>
+      plan.review
+        ? plan.actions.length <= 2 &&
+          plan.review.simulatedDate === plan.createdDate &&
+          plan.recoveryCeiling === null
+        : plan.actions.length >= 2 && plan.recoveryCeiling !== null,
+    {
+      message:
+        'Initial plans need two or three actions; simulated reviews need one or two without a monthly forecast',
+    },
+  )
   .refine(
     (plan) =>
       new Set(plan.actions.map((action) => action.id)).size ===
@@ -64,6 +83,7 @@ export const committedPlanSchema = z
     plan: actionPlanSchema,
     committedAt: z.iso.datetime(),
     acceptedActionIds: z.array(sellerActionIdSchema).min(1).max(3),
+    sellerFacts: sellerFactsSchema.optional(),
   })
   .refine(
     (record) =>

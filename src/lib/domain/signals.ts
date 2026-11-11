@@ -3,7 +3,7 @@ import type {
   SkuData,
   CancellationData,
 } from '@/lib/domain/data-schemas';
-import type { Signal, SignalId } from '@/lib/domain/types';
+import type { Signal, SignalId, DomainState } from '@/lib/domain/types';
 import { DEFAULT_THRESHOLDS } from '@/lib/domain/settings';
 import type { SignalThresholds } from '@/lib/domain/settings';
 import {
@@ -16,6 +16,7 @@ interface SignalInput {
   seller: SellerSnapshot;
   skus?: SkuData;
   cancellations?: CancellationData;
+  review?: DomainState['review'];
 }
 
 function signal(
@@ -73,7 +74,23 @@ export function signals(
       `The cancellation rate increased by ${String(round(cancelIncrease))} percentage points.`,
     ),
   ];
-  if (input.skus) {
+  if (input.review) {
+    result.push(
+      signal(
+        'S_REMAINING_OOS',
+        input.review.remainingOos > 0,
+        input.review.remainingOos,
+        `${String(input.review.remainingOos)} priority products remain out of stock in the illustrative review.`,
+      ),
+      signal(
+        'S_PARTIAL_RESTOCK',
+        input.review.partialRestock,
+        null,
+        'The audited restock action is partial.',
+      ),
+    );
+  }
+  if (input.skus && !input.review) {
     const inventory = inventoryMetrics(input.seller, input.skus);
     result.push(
       signal(

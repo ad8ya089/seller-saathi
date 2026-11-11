@@ -17,6 +17,8 @@ export const EVIDENCE_WEIGHTS: Readonly<Record<SignalId, Weights>> = {
   S_SKU_CONCENTRATION: { STOCK: 3, DEMAND: -1 },
   S_CANCEL_STOCK_DOMINANT: { STOCK: 2, FULFIL: -1 },
   S_CANCEL_DISPATCH_DOMINANT: { FULFIL: 2 },
+  S_REMAINING_OOS: { STOCK: 2 },
+  S_PARTIAL_RESTOCK: { STOCK: 1 },
 };
 export const FACT_WEIGHTS: Readonly<
   Partial<Record<FactId, Readonly<Record<string, Weights>>>>

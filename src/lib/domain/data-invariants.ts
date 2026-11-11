@@ -110,5 +110,27 @@ export function verifyData(data: SellerData): InvariantResult[] {
     followup.baselineThisMonthOrdersPerDay,
     9,
   );
+  check('Day seven window', followup.windowDays, 7);
+  check('Day seven orders', followup.rolling7.orders, 83);
+  check('Day seven cancellation rate', followup.rolling7.cancelRate, 0.096);
+  check('Day seven OOS products', followup.rolling7.oosProducts, 11);
+  check('Day seven kurti stock', followup.skuStock['KUR-101'] ?? -1, 60);
+  check('Day seven saree stock', followup.skuStock['SAR-201'] ?? -1, 0);
+  check('Day seven kurti-pant stock', followup.skuStock['KUR-103'] ?? -1, 0);
+  check(
+    'Day seven restock partial',
+    Number(followup.actionStatus.A_RESTOCK_TOP === 'partial'),
+    1,
+  );
+  check(
+    'Day seven stock sync done',
+    Number(followup.actionStatus.A_STOCK_SYNC === 'done'),
+    1,
+  );
+  check(
+    'Day seven promotion done',
+    Number(followup.actionStatus.A_PUSH_INSTOCK === 'done'),
+    1,
+  );
   return result;
 }
