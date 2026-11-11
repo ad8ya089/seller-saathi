@@ -5,6 +5,7 @@ import { AppError } from '@/lib/errors';
 import type { Session } from '@/lib/agent/session';
 import { languageSchema } from '@/lib/voice/language';
 import type { Language } from '@/lib/voice/language';
+import type { FollowupContext } from '@/lib/domain/followup-types';
 
 interface Limits {
   ttlMs: number;
@@ -25,13 +26,18 @@ export class SessionStore {
     private readonly now: () => number = Date.now,
     private readonly createId: () => string = randomUUID,
   ) {}
-  create(options: { lang?: Language } = {}): Session {
+  create(
+    options: { lang?: Language; followup?: FollowupContext } = {},
+  ): Session {
     this.prune();
     const session: Session = {
       id: this.createId(),
       createdAt: this.now(),
       lang: languageSchema.parse(options.lang ?? 'en-IN'),
-      mode: 'call',
+      mode: options.followup ? 'followup' : 'call',
+      ...(options.followup
+        ? { followup: structuredClone(options.followup) }
+        : {}),
       phase: 'greeting',
       turn: 0,
       questionsAsked: [],

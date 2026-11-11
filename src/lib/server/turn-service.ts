@@ -148,7 +148,7 @@ export class TurnService {
                 turn: base.turn,
                 metrics,
                 status: 'success',
-                phase: base.phase,
+                phase: base.followup?.phase ?? base.phase,
               });
             } catch {
               // Observability must not turn a completed call into a failed turn.
@@ -169,7 +169,7 @@ export class TurnService {
               this.onCompleted?.({
                 sessionId: base.id,
                 turn: base.turn,
-                phase: base.phase,
+                phase: base.followup?.phase ?? base.phase,
                 status: signal.aborted ? 'interrupted' : 'failed',
                 errorCode: failure.code,
                 metrics: metrics ?? {

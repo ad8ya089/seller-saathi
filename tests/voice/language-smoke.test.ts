@@ -50,20 +50,16 @@ describe('bounded Hindi smoke with fake providers', () => {
     const result = await runHinglishSmoke(
       {
         tts: {
-          synthesize: vi
-            .fn()
-            .mockResolvedValue({
-              wav: wavFixture({ sampleRate: 24000 }),
-              ms: 2,
-            }),
+          synthesize: vi.fn().mockResolvedValue({
+            wav: wavFixture({ sampleRate: 24000 }),
+            ms: 2,
+          }),
         },
         stt: {
-          transcribe: vi
-            .fn()
-            .mockResolvedValue({
-              text: 'My sales fell. Please check stock.',
-              ms: 3,
-            }),
+          transcribe: vi.fn().mockResolvedValue({
+            text: 'My sales fell. Please check stock.',
+            ms: 3,
+          }),
         },
       },
       'Meri sale gir gayi hai.',

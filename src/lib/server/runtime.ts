@@ -7,7 +7,8 @@ import { randomUUID } from 'node:crypto';
 import { getConfig } from '@/lib/server/config';
 import { getLogger } from '@/lib/server/logger';
 import { loadData } from '@/lib/server/data-loader';
-import { appendPlan, listLatest } from '@/lib/server/ledger';
+import { appendPlan, listLatest, getLatestPlan } from '@/lib/server/ledger';
+import { appendAudit, findAudit } from '@/lib/server/followup-ledger';
 import { getSessionStore } from '@/lib/server/session-registry';
 import { TurnService } from '@/lib/server/turn-service';
 import { GreetingCache } from '@/lib/server/greeting';
@@ -20,6 +21,7 @@ import type { AgentServices } from '@/lib/server/agent-api';
 import { languageSchema, sarvamProfile } from '@/lib/voice/language';
 import type { Language } from '@/lib/voice/language';
 import type { TtsProvider } from '@/lib/voice/providers';
+import type { Session } from '@/lib/agent/session';
 
 export class AppRuntime implements AgentServices {
   readonly config = getConfig();
@@ -66,7 +68,7 @@ export class AppRuntime implements AgentServices {
       tts: this.limitedTts,
       maxToolRounds: this.config.maxToolRounds,
       compactToolHistory: this.config.compactToolHistory,
-      tools: await this.toolEnvironment(),
+      tools: await this.toolEnvironment(session),
     }),
     Date.now,
     (report) => {
@@ -104,19 +106,29 @@ export class AppRuntime implements AgentServices {
     this.loaded ??= loadData(this.config.mockDataDir);
     return this.loaded;
   }
-  async toolEnvironment(): Promise<ToolEnvironment> {
+  async toolEnvironment(session?: Session): Promise<ToolEnvironment> {
     return {
       data: await this.data(),
       settings: this.config,
-      today: businessDate(new Date()),
+      today: session?.followup
+        ? new Date(`${session.followup.simulatedDate}T00:00:00Z`)
+        : businessDate(new Date()),
       now: () => new Date(),
       createPlanId: randomUUID,
       append: (record, signal) =>
         appendPlan(record, this.config.dataDir, { once: true, signal }),
+      appendAudit: (record, signal) =>
+        appendAudit(record, this.config.dataDir, signal),
     };
   }
   ledger(): ReturnType<AgentServices['ledger']> {
     return listLatest(20, this.config.dataDir);
+  }
+  lookupPlan(planId: string): ReturnType<typeof getLatestPlan> {
+    return getLatestPlan(planId, this.config.dataDir);
+  }
+  readAudit(planId: string, runId: string): ReturnType<typeof findAudit> {
+    return findAudit(planId, runId, this.config.dataDir);
   }
   clipsFor(language: Language): AudioCache {
     return language === 'hi-IN' ? this.hindiClips : this.clips;

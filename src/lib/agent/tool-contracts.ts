@@ -11,9 +11,11 @@ export const toolNameSchema = z.enum([
   'record_seller_fact',
   'propose_action_plan',
   'commit_action_plan',
+  'get_followup_status',
 ]);
 export type ToolName = z.infer<typeof toolNameSchema>;
 export const TOOL_ARGS = {
+  get_followup_status: z.strictObject({}),
   get_seller_snapshot: z.strictObject({}),
   get_sku_breakdown: z.strictObject({
     limit: z.number().int().min(1).max(10).optional(),
@@ -35,6 +37,7 @@ export const TOOL_ARGS = {
   }),
 } as const;
 export const TOOL_LABELS: Readonly<Record<ToolName, string>> = {
+  get_followup_status: 'Reviewing the illustrative action audit.',
   get_seller_snapshot: 'Checking your numbers.',
   get_sku_breakdown: 'Checking stock by product.',
   get_cancellation_breakdown: 'Checking cancellation reasons.',
@@ -44,6 +47,8 @@ export const TOOL_LABELS: Readonly<Record<ToolName, string>> = {
   commit_action_plan: 'Saving your plan.',
 };
 const DESCRIPTIONS: Readonly<Record<ToolName, string>> = {
+  get_followup_status:
+    "Read the validated simulated Day-7 statuses and metrics for this session's exact committed plan. Missing status is unavailable. Never invent or change a status.",
   get_seller_snapshot:
     'Read seller metrics, bridges and deterministic diagnosis before making claims.',
   get_sku_breakdown:

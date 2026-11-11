@@ -81,7 +81,12 @@ export function hindiFact(
   if (fact.value === 'partial' || fact.value === 'sometimes')
     return (
       /partial|kuch|thoda|kabhi|कुछ|थोड़ा|कभी/u.test(text) &&
-      (answering || /stock|dispatch|courier|स्टॉक/u.test(text))
+      (answering ||
+        (fact.factId === 'dispatch_on_time'
+          ? /dispatch|courier|handover|packing|डिस्पैच|कूरियर/u.test(text)
+          : /(?:some|kuch|कुछ).*(?:out of stock|stockout|स्टॉक.*खत्म)/u.test(
+              text,
+            )))
     );
   if (
     fact.value === 'no' &&

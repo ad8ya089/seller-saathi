@@ -34,6 +34,7 @@ import type { EchoInput } from '@/lib/server/turn-input';
 import type { EmitEchoEvent } from '@/lib/voice/events';
 import { throwIfAborted } from '@/lib/voice/abort';
 import type { Language } from '@/lib/voice/language';
+import { runFollowupTurn } from '@/lib/agent/followup-turn';
 
 export interface TurnMetrics {
   language?: Language;
@@ -144,6 +145,8 @@ export async function runTurn(
     event: 'transcript',
     data: { text: session.lastUserText, sttMs: metrics.sttMs },
   });
+  if (session.mode === 'followup')
+    return runFollowupTurn(session, emit, env, metrics, started, now);
   beginTurn(session);
   const history: HistoryTurn = {
     turn: session.turn,

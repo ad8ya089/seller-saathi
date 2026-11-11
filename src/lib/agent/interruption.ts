@@ -46,6 +46,12 @@ export function applyPlaybackReceipt(session: Session, played: number): void {
     session.proposedPlan?.proposedAtTurn === response.turn &&
     played < response.sentences.length
   ) {
+    if (session.followup) {
+      session.followup.awaitingAcceptance = false;
+      delete session.proposedPlan;
+      session.phase = 'recommend';
+      return;
+    }
     transition(session, 'recommend');
     delete session.proposedPlan;
     transition(session, 'investigate');

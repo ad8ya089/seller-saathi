@@ -26,6 +26,8 @@ import { supportsFact, verifiedAcceptance } from '@/lib/agent/guards';
 import { findingsComplete, toolAllowed, transition } from '@/lib/agent/phases';
 import { throwIfAborted } from '@/lib/voice/abort';
 import { share } from '@/lib/domain/numbers';
+import { followupView } from '@/lib/agent/followup-state';
+import type { FollowupAudit } from '@/lib/domain/followup-types';
 
 export interface ToolEnvironment {
   data: SellerData;
@@ -34,6 +36,7 @@ export interface ToolEnvironment {
   now: () => Date;
   createPlanId: () => string;
   append: (record: CommittedPlan, signal: AbortSignal) => Promise<void>;
+  appendAudit?: (record: FollowupAudit, signal: AbortSignal) => Promise<void>;
 }
 function rejected(message: string): never {
   throw new AppError('COMMIT_REJECTED', message);
@@ -75,6 +78,7 @@ function stageCommit(
     },
     committedAt: env.now().toISOString(),
     acceptedActionIds,
+    sellerFacts: session.facts,
   });
   session.pendingCommit = record;
   transition(session, 'commit');
@@ -106,6 +110,9 @@ function execute(
       `Arguments do not match the schema for ${name}`,
     );
   switch (name) {
+    case 'get_followup_status':
+      session.toolsCalled.add(name);
+      return { ok: true, ...followupView(session) };
     case 'get_seller_snapshot': {
       session.toolsCalled.add(name);
       if (session.phase === 'intake') transition(session, 'findings');

@@ -11,6 +11,8 @@ import type { LlmMessage, TokenUsage } from '@/lib/llm/provider';
 import type { ToolName } from '@/lib/agent/tool-contracts';
 import type { Language } from '@/lib/voice/language';
 import { AppError } from '@/lib/errors';
+import type { FollowupContext } from '@/lib/domain/followup-types';
+import { followupState } from '@/lib/domain/followup-planning';
 
 export interface HistoryTurn {
   turn: number;
@@ -31,7 +33,8 @@ export interface Session {
   id: string;
   createdAt: number;
   readonly lang: Language;
-  mode: 'call';
+  readonly mode: 'call' | 'followup';
+  followup?: FollowupContext;
   phase: Phase;
   turn: number;
   reprompts?: number;
@@ -53,6 +56,8 @@ export interface Session {
   };
 }
 export function domainState(session: Session, data: SellerData): DomainState {
+  if (session.mode === 'followup' && session.followup)
+    return followupState(data, session.followup.rows, session.facts);
   return {
     snapshot: data.seller,
     skus: data.skus,
@@ -73,6 +78,9 @@ export function domainState(session: Session, data: SellerData): DomainState {
 export function cloneSession(session: Session): Session {
   return {
     ...session,
+    ...(session.followup
+      ? { followup: structuredClone(session.followup) }
+      : {}),
     facts: { ...session.facts },
     questionsAsked: [...session.questionsAsked],
     toolsCalled: new Set(session.toolsCalled),
@@ -94,7 +102,7 @@ export function trimHistory(session: Session, maxMessages = 12): void {
     session.history.shift();
 }
 export function replaceSession(base: Session, draft: Session): void {
-  if (base.lang !== draft.lang)
+  if (base.lang !== draft.lang || base.mode !== draft.mode)
     throw new AppError(
       'INVALID_INPUT',
       'Start a fresh session to change language or call mode',

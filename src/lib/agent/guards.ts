@@ -118,7 +118,10 @@ export function supportsFact(
     );
   if (fact.value === 'partial' || fact.value === 'sometimes')
     return (
-      (answering || /stock|dispatch|courier/.test(text)) &&
+      (answering ||
+        (fact.factId === 'dispatch_on_time'
+          ? /dispatch|courier|handover|packing/.test(text)
+          : /(?:some|not all).*(?:out of stock|stockout)/.test(text))) &&
       /\b(partial|some|sometimes|occasionally|not all)\b/.test(text)
     );
   const negative = /\b(no|not|dont|doesnt|cant|cannot|never)\b/.test(text);

@@ -95,6 +95,14 @@ export function transition(
   session.phase = next;
 }
 export function toolAllowed(session: Session, name: ToolName): boolean {
+  if (session.mode === 'followup')
+    return (
+      (session.followup?.phase === 'AUDIT' && name === 'get_followup_status') ||
+      (session.followup?.phase === 'NEXT_STEPS' &&
+        session.followup.awaitingAcceptance &&
+        session.phase === 'confirm' &&
+        name === 'commit_action_plan')
+    );
   if (!TOOLS[session.phase].includes(name)) return false;
   if (
     session.phase === 'intake' &&

@@ -28,6 +28,14 @@ import { echoSseResponse } from '@/lib/server/sse';
 import { throwIfAborted } from '@/lib/voice/abort';
 import type { Language } from '@/lib/voice/language';
 import { HINDI_GREETING } from '@/lib/server/greeting';
+import type { Session } from '@/lib/agent/session';
+import type { FollowupAudit } from '@/lib/domain/followup-types';
+import { prepareFollowup } from '@/lib/server/followup-start';
+import {
+  advanceFollowup,
+  captureFollowupView,
+} from '@/lib/agent/followup-state';
+import { followupGreeting } from '@/lib/domain/followup-speech';
 
 export interface AgentServices {
   warmClips?: (language?: Language) => void;
@@ -38,8 +46,10 @@ export interface AgentServices {
   greeting: GreetingCache;
   config: AppConfig;
   data: () => Promise<SellerData>;
-  toolEnvironment: () => Promise<ToolEnvironment>;
+  toolEnvironment: (session?: Session) => Promise<ToolEnvironment>;
   ledger: () => Promise<CommittedPlan[]>;
+  lookupPlan?: (planId: string) => Promise<CommittedPlan | null>;
+  readAudit?: (planId: string, runId: string) => Promise<FollowupAudit | null>;
 }
 export function apiFailure(error: unknown): Response {
   const actual =
@@ -104,27 +114,60 @@ export function createSessionHandler(
         throw new AppError('RATE_LIMIT', 'Too many calls', true);
       if (!services.config.providers.gemini)
         throw new AppError('PROVIDER_CONFIG', 'Gemini is not configured');
-      const [greeting, data] = await Promise.all([
-        services.greeting
-          .get(request.signal, input.lang)
-          .catch((error: unknown) => {
-            throwIfAborted(request.signal);
-            if (input.lang !== 'hi-IN') throw error;
-            return {
-              text: HINDI_GREETING,
-              audioB64: null,
-              mime: 'audio/wav' as const,
-            };
-          }),
-        services.data(),
-      ]);
+      const data = await services.data();
+      // Resolve exact durable ownership before any provider work or session creation.
+      const followup = await prepareFollowup(input, services, data);
+      const greetingText = followup
+        ? followupGreeting(
+            data.followup.windowDays,
+            input.lang,
+            Boolean(followup.audit),
+          )
+        : undefined;
+      const greeting = await services.greeting
+        .get(request.signal, input.lang, greetingText)
+        .catch((error: unknown) => {
+          throwIfAborted(request.signal);
+          if (input.lang !== 'hi-IN') throw error;
+          return {
+            text: greetingText ?? HINDI_GREETING,
+            audioB64: null,
+            mime: 'audio/wav' as const,
+          };
+        });
       throwIfAborted(request.signal);
       services.warmClips?.(input.lang);
-      const session = services.sessions.create({ lang: input.lang });
+      const session = services.sessions.create({
+        lang: input.lang,
+        ...(followup ? { followup } : {}),
+      });
+      if (session.followup) {
+        if (session.followup.phase === 'FOLLOWUP_INTRO') {
+          advanceFollowup(session, 'AUDIT');
+          session.followup.auditQuestions = 1;
+        }
+        session.facts = {
+          ...(session.followup.audit?.facts ??
+            session.followup.original.sellerFacts ??
+            {}),
+        };
+        // An old delivery estimate is not a fresh seven-day-review promise.
+        if (!session.followup.audit) delete session.facts.restock_eta_days;
+        captureFollowupView(session, data);
+        if (session.followup.completedRecord) {
+          session.committedPlan = session.followup.completedRecord;
+          session.proposedPlan = {
+            plan: session.committedPlan.plan,
+            proposedAtTurn: 0,
+          };
+          session.phase = 'done';
+        }
+      }
       return Response.json(
         sessionResponseSchema.parse({
           sessionId: session.id,
           lang: session.lang,
+          ...(session.followup ? { initialState: sessionState(session) } : {}),
           greeting,
           snapshot: sellerSnapshot(session, data, services.config),
           config: {
@@ -213,13 +256,21 @@ export function createConfirmHandler(
           draft.turn += 1;
           draft.lastUserText = '';
           if (input.decision === 'decline') {
-            transition(draft, 'recommend');
+            if (draft.followup) {
+              advanceFollowup(draft, 'DONE');
+              draft.followup.awaitingAcceptance = false;
+              draft.phase = 'done';
+            } else transition(draft, 'recommend');
             delete draft.proposedPlan;
           } else {
-            const environment = await services.toolEnvironment();
+            const environment = await services.toolEnvironment(draft);
             stageUiConfirmation(draft, input.planId, environment);
             await finalizeCommit(draft, environment, signal);
             transition(draft, 'done');
+            if (draft.followup) {
+              advanceFollowup(draft, 'DONE');
+              draft.followup.awaitingAcceptance = false;
+            }
           }
           replaceSession(base, draft);
           return sessionState(base);
