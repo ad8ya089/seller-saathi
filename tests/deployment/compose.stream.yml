@@ -1,0 +1,21 @@
+services:
+  app:
+    image: node:22-alpine
+    command: [node, /probe.mjs]
+    environment:
+      TRUSTED_PROXY_TOKEN: p6-synthetic-proxy-only
+    volumes:
+      - ./proxy-upstream.mjs:/probe.mjs:ro
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: example.test
+      TRUSTED_PROXY_TOKEN: p6-synthetic-proxy-only
+    ports: ['127.0.0.1:9443:443']
+    volumes:
+      - ../../.tmp/p6/Caddyfile:/etc/caddy/Caddyfile:ro
+      - certificates:/data
+      - configuration:/config
+volumes:
+  certificates:
+  configuration:
