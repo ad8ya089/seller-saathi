@@ -101,3 +101,9 @@ Story: stock sync done → stock cancels fall; kurti set partially restocked →
 
 ## 7. Language of numbers (for TTS)
 Spoken form: "two lakh rupees", "one lakh thirty-five thousand rupees", "thirty-two point five percent" or "about a third". Never "₹", "Rs.", "%", "pp", SKU codes in speech (names only; codes stay on screen).
+
+# P7 follow-up mapping
+
+`data/followup_day7.json` is unchanged. The verifier now checks all expected Day-7 constants, including the action statuses and priority SKU stock, in addition to the original invariants. The schema permits missing seller-action statuses (displayed as Not available), rejects unknown action IDs and still validates all counts/rates. The sample itself retains restock Partial, stock sync Done and promotion Done.
+
+The fixture reports seven-day orders 83, pace 11.9/day against the 9/day baseline, overall cancellation rate 0.096 and OOS listings 11. Priority stock is 60 for KUR-101, zero for SAR-201 and zero for KUR-103. Only accepted parent-plan actions are audited. Unaccepted/proposed-only actions are not commitments. No new cancellation reasons or product-level seven-day order counts are supplied, and neither can be inferred from the older monthly dataset.

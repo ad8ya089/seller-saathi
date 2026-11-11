@@ -94,3 +94,15 @@ Optional LLM-judge (1–5): naturalness, concision, empathy, correct uncertainty
 5. §6 checklist ticked; `docs/06 §7` ticked.
 6. Recording done from the public URL; local compose run verified on a clean clone.
 7. Note (`docs/08`) updated with *measured* numbers, not targets.
+
+# P7 implemented test paths
+
+Ordinary tests remain offline. Language coverage includes profile/request validation, immutable sessions, cache isolation, Hindi browser fallback, preserved literal evidence, Roman Hinglish prompts, danda/decimal chunking, number formatting and a complete S8 fake-provider conversation. English guard and conversation regressions run in the same suite.
+
+Day-7 coverage includes ownership before synthesis, proposed-only rejection, accepted-action scoping, unavailable statuses, quoted corrections, causation rejection, deterministic rankings, completed/feasibility/price filters, the one-or-two-action review-plan boundary, later explicit voice/UI acceptance, interruption, replay, failed audit append rollback, parent ledger integrity, idempotent audit writes and resume after session removal. Browser tests cover desktop/mobile audit displays, no pre-session fixture values, no premature save and a fresh English call after Hindi. Test servers use empty provider keys and route fakes; their verified-profile flag is test setup, not a live provider result.
+
+S8 now participates in the ten-persona harness. `npm run eval -- --persona S8 --runs 1 --preflight` prints the paid text-only scope. Without `--confirm-spend`, execution stops before any provider call. A live pilot does not satisfy the full three-runs-per-persona 27/30 gate. Old P5 failures and latency limits remain pending.
+
+F1 stays separate: `npm run eval -- --scenario followup --fake` runs the full deterministic fake-provider review using an isolated guarded S1 commitment and ledger. `--scenario followup --preflight` describes the optional four-request Gemini text run; that live path requires fresh approval and `--confirm-spend`. Reports capture prompt version, configured/actual models, language, tools, phases, audit statuses, proposals and ledger changes. Private traces stay under ignored `.data/evals/`; no production fake-provider switch was added.
+
+The fourteen-step physical language/review checklist and actual P7 results are in [p7-report.md](p7-report.md). Automated scheduling, fake audio and synthetic round trips do not establish physical pronunciation, listening comfort or microphone accuracy.

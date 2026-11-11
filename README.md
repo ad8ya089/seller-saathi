@@ -1,6 +1,6 @@
 # SellerSaathi — Snapdeal Virtual KAM
 
-## Implementation status — P6 deployment preparation
+## Implementation status — P7 language and simulated Day-7 review
 
 SellerSaathi runs the seller recovery conversation: local Silero VAD → WAV → Sarvam STT → Gemini function calls → guarded deterministic domain tools → sentence-streamed Sarvam TTS → Web Audio. The responsive dashboard pairs that conversation with Snapshot, Diagnosis and Recovery Plan tabs. Metrics, evidence, confidence, seller statements and commitments update from server data. Server sessions enforce phases, three investigation questions, eligible plans and explicit acceptance before a JSONL commitment. All seller data is mock data; saved plans do not change Snapdeal systems.
 
@@ -14,9 +14,9 @@ npm run dev
 
 Open `http://localhost:3000/?debug=1` in Chrome. Click Call, allow the microphone and hear the AI greeting. Explain a sales drop, answer the stock and restock questions, review the spoken plan and explicitly accept it. Interruptions are enabled by default. Turn off Allow interruptions to use half-duplex capture, which pauses during processing/playback and resumes after a short cooldown. End Call cancels server work and releases microphone tracks. English-India is the P3 call language. Localhost or HTTPS is required for microphone access. Debug measures the last VAD speech frame to scheduled playback; device output delay is not measured.
 
-Use the tabs alongside the call to inspect the business comparison, evidence behind each hypothesis and action owners/dates. Confirm Plan and Not Now use the existing guarded API. Saved status appears only after server confirmation; the accepted actions and actual follow-up date are read from the ledger. The footer contains the documented assumptions. Hindi remains disabled. P3's measured Chrome median first audio was **11.77 seconds**. The P5 single-turn HTTP pilot measured **13.93 seconds**, with a different measurement boundary; no voice-latency improvement or twenty-sample gate is claimed. See the [P5 report](docs/p5-report.md).
+Use the tabs alongside the call to inspect the business comparison, evidence behind each hypothesis and action owners/dates. Confirm Plan and Not Now use the existing guarded API. Saved status appears only after server confirmation; the accepted actions and actual follow-up date are read from the ledger. The footer contains the documented assumptions. English is the default; Hindi/Hinglish remains disabled until the operator verifies its provider profile and enables `HINGLISH_ENABLED`. P3's measured Chrome median first audio was **11.77 seconds**. The P5 single-turn HTTP pilot measured **13.93 seconds**, with a different measurement boundary; no voice-latency improvement or twenty-sample gate is claimed. See the [P5 report](docs/p5-report.md).
 
-`npm ci` copies pinned VAD/ONNX assets into ignored `public/vad/` through postinstall; the app configures local URLs for all four assets. `npm run smoke:sarvam` makes a bounded live audition (five TTS + four STT calls), saves ignored WAVs under `.data/audition/`, and records observed results in [provider notes](docs/provider-notes.md). Ordinary tests use fakes and reject live network calls.
+`npm ci` copies pinned VAD/ONNX assets into ignored `public/vad/` through postinstall; the app configures local URLs for all four assets. `npm run smoke:sarvam -- --preflight` prints the English audition scope; live runs require `--confirm-spend`. The smaller `--hinglish --preflight` path plans only one short TTS request and one STT request from its synthetic audio, with retries disabled. Private WAVs stay under `.data/audition/`; aggregate observations go in [provider notes](docs/provider-notes.md). Ordinary tests use fakes and reject live network calls.
 
 Production locally: `npm run build`, then `npm start`. Startup copies static assets and mock data into the generated standalone directory and launches its server. Set `PORT` and `HOSTNAME` in `.env` or the shell. Set an absolute `DATA_DIR` when sharing the same ledger between development, CLI and standalone: the generated standalone server changes its working directory. Run `npm run lint`, `npm run typecheck`, `npm test`, `npm run verify-data`, and `npm run build` for verification. `npm run test:watch` starts Vitest watch mode.
 
@@ -51,7 +51,25 @@ npm run bench -- --count 1 --preflight
 npm run bench -- --count 1 --base-url http://localhost:3000 --generate-fixtures --confirm-spend
 ```
 
-Run paid commands only after reviewing their preflight and approving the spend. The full scope is nine supported personas times three runs (27); S8 belongs to P7. The interim gate is 25/27; the original 27/30 release gate remains pending. WAV generation skips existing fixtures and validates 3–8 second PCM recordings. Private evaluation ledgers/traces and benchmark details stay under ignored `.data/`. The selected synthetic recording in `tests/fixtures/voice/` is deliberately committed. `COMPACT_TOOL_HISTORY=false` is the default. The opt-in completed-tool summary reduced history bytes in the pilot, but that evaluation failed before saving; it remains disabled pending a successful live acceptance check. Model Content, signatures, proposals and commitment results remain preserved in either mode.
+Run paid commands only after reviewing their preflight and approving the spend. P7 adds S8: the full scope is now ten personas times three runs (30), with a 27/30 gate. Earlier P5 pilots and the interim 25/27 gate do not satisfy it. WAV generation skips existing fixtures and validates 3–8 second PCM recordings. Private evaluation ledgers/traces and benchmark details stay under ignored `.data/`. The selected synthetic recording in `tests/fixtures/voice/` is deliberately committed. `COMPACT_TOOL_HISTORY=false` is the default. The opt-in completed-tool summary reduced history bytes in the pilot, but that evaluation failed before saving; it remains disabled pending a successful live acceptance check. Model Content, signatures, proposals and commitment results remain preserved in either mode.
+
+## P7 language and follow-up
+
+Hindi calls use immutable `hi-IN` sessions, a respectful Roman-script Hinglish prompt, preserved literal transcripts, Hindi-aware fact/consent guards and separate language/configuration audio caches. `.env.example` documents the configurable `SARVAM_HI_*` profile. Technical provider verification and physical listening quality are separate checks; see [P7 results and manual checklist](docs/p7-report.md).
+
+After saving a plan, **Fast-forward 7 days** opens an illustrative review of that exact durable commitment. Only accepted seller actions are audited. The original plan is unchanged; audit records append to `DATA_DIR/followup-audits.jsonl`. The separate review phases audit progress, recompute the deterministic diagnosis and propose at most two eligible actions. New actions need fresh explicit acceptance. Order pace, overall cancellations and remaining stock come from the unchanged synthetic fixture; cancellation reasons and a new monthly recovery forecast are unavailable.
+
+```sh
+npm run smoke:sarvam -- --hinglish --preflight
+# Only after approving the two-request paid scope:
+npm run smoke:sarvam -- --hinglish --confirm-spend
+npm run eval -- --persona S8 --runs 1 --preflight
+# Live S8 needs fresh approval and --confirm-spend.
+npm run eval -- --scenario followup --fake
+npm run eval -- --scenario followup --preflight
+```
+
+F1 is a separate Day-7 evaluation, seeded by a guarded synthetic S1 commitment. Its default fake path makes no external calls; the optional live text-only path requires its own `--confirm-spend`. It does not contribute to the 30-run persona gate.
 
 The cost/infra figures in the original design pack below are historical planning inputs. Current model-specific price units, verification dates and measurement limits are recorded in the P5 report.
 
@@ -93,4 +111,4 @@ Cascaded voice pipeline · Sarvam Saaras STT + Bulbul TTS · Gemini 3.5 Flash-Li
 - Brief's "1–2 hours expected effort" vs this scope: the core path (P1–P3 + minimal UI) already satisfies the brief; everything after is differentiation. Don't let it threaten the deadline.
 
 ## Start
-P1–P6 are local, with P6 limited to deployment preparation. Paid P5 runs were limited to pilots at the user's request: the full 27-run persona gate, 20-turn benchmark and remaining recordings are pending. The approved S1 simulator pilot failed (0/1); its explicit-consent rejection was fixed offline and awaits a live rerun. The separate scripted S1 baseline passed. Physical speaker/headphone QA is unverified. Deployment packaging does not make the application production-ready. P7 has not started.
+P1–P7 are local, with P6 limited to deployment preparation. Paid P5 runs were limited to pilots at the user's request: the full persona gate, 20-turn benchmark and remaining recordings are pending. The approved S1 simulator pilot failed (0/1); its explicit-consent rejection was fixed offline and awaits a live rerun. The separate scripted S1 baseline passed. Physical speaker/headphone and language QA are unverified. Deployment packaging and P7 do not satisfy those release gates. No P8 work is included.

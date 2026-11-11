@@ -182,3 +182,15 @@ Accessibility: keyboard-operable buttons, `aria-live` for transcript, reduced-mo
 4. 50–75s: plan spoken, plan card appears; seller says yes.
 5. 75–90s: "Saved", summary spoken; ledger entry visible; cursor on follow-up date.
 Use S1 with short answers. Record system audio + mic (QuickTime+BlackHole / OBS). Headphones off? Use laptop speakers + good AEC, or headphones with system-audio capture — test beforehand.
+
+# P7 implementation addendum
+
+English remains the default. A verified Hindi profile can enable immutable `hi-IN` calls with Roman-script Hinglish replies and literal seller transcripts retained in either script. This adds language handling to the existing three-question recovery flow, not a second set of business facts or actions. The initial greeting alone discloses the AI identity.
+
+The implemented simulated review has its own phases: `FOLLOWUP_INTRO → AUDIT → RE_DIAGNOSE → NEXT_STEPS → DONE`. Session creation introduces the illustrative review and asks its single audit confirmation/feasibility question. The first seller reply triggers `get_followup_status`, literal audit corrections, deterministic re-diagnosis and proposed next steps. A resumed audit does not ask another audit question. New actions are never implicitly accepted by the audit answer.
+
+Only accepted seller actions from the exact durable parent plan appear in the audit. Status labels are Done, Partial, Not done and Not available. Missing sample statuses stay unavailable. Recognized declarative corrections keep the entire exact seller quote and a seller-reported source; ambiguous statements and instructions cannot invent completion. Feasibility facts use the ordinary literal-evidence guards. Old delivery estimates are not reused as fresh promises.
+
+The fixture's overall cancellation rate improves, but it contains no updated cancellation-reason breakdown. Therefore the original story about reduced stock-unavailable cancellations is an unverified hypothesis, not a reported Day-7 fact. No causal percentage increase or monthly recovery ceiling is claimed. The illustrative comparison is baseline daily orders versus rolling seven-day pace; original monthly Snapshot data stays labelled separately.
+
+Review plans may contain one or two eligible seller actions. Initial recovery plans still require two or three. Completed actions are excluded, except restock may require further work when validated priority SKU stock is still zero. The same catalog, feasibility and price guards apply at proposal and commitment. The default sample leaves one restock action; stock sync and in-stock promotion are complete. Review plans carry parent/run/simulated-date metadata and no monthly recovery forecast. The next review is seven simulated days later. All plans remain demo-only commitments.
