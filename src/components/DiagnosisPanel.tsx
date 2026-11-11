@@ -17,6 +17,35 @@ export function DiagnosisPanel({
   state: AppState;
   reference: DashboardReference | null;
 }): ReactNode {
+  if (state.agent?.followup)
+    return (
+      <div className="space-y-4 p-5 sm:p-6">
+        <p className="eyebrow">Simulated Day-7 diagnosis</p>
+        <h2 className="text-xl font-semibold">
+          Remaining gaps guide the next steps
+        </h2>
+        <p className="text-sm leading-6 text-slate-600">
+          The review uses rolling order pace, overall cancellations, remaining
+          stock and the commitment audit. Historical cancellation reasons and
+          SKU order concentration are unavailable for this window.
+        </p>
+        <ul className="space-y-2 text-sm">
+          {state.agent.hypotheses.map((hypothesis) => (
+            <li className="flex justify-between gap-3" key={hypothesis.id}>
+              <span>{HYPOTHESIS_NAMES[hypothesis.id]}</span>
+              <span>
+                Score {number(hypothesis.score)} · {hypothesis.level}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs leading-5 text-slate-500">
+          Scores follow deterministic demo rules, not probabilities or proof of
+          causation. Review audit details, metrics and recommendations in
+          Recovery Plan.
+        </p>
+      </div>
+    );
   const ranking = state.agent?.hypotheses ?? state.snapshot?.hypotheses ?? [];
   if (!state.snapshot && !ranking.length)
     return (

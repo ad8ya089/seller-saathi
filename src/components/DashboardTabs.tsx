@@ -16,12 +16,14 @@ export function DashboardTabs({
   state,
   reference,
   onConfirm,
+  onFollowup,
   selected,
   onSelect,
 }: {
   state: AppState;
   reference: DashboardReference | null;
   onConfirm: (decision: 'accept' | 'decline') => Promise<void>;
+  onFollowup?: (planId: string) => Promise<void>;
   selected?: DashboardTab;
   onSelect?: (tab: DashboardTab) => void;
 }): ReactNode {
@@ -101,6 +103,12 @@ export function DashboardTabs({
         tabIndex={0}
         hidden={tab !== 'snapshot'}
       >
+        {state.agent?.followup && (
+          <p className="px-5 pt-4 text-xs text-slate-500">
+            Original monthly snapshot. The simulated seven-day figures are in
+            Recovery Plan.
+          </p>
+        )}
         <SnapshotPanel
           snapshot={state.snapshot}
           reference={reference}
@@ -124,7 +132,11 @@ export function DashboardTabs({
         tabIndex={0}
         hidden={tab !== 'plan'}
       >
-        <PlanPanel state={state} onConfirm={onConfirm} />
+        <PlanPanel
+          state={state}
+          onConfirm={onConfirm}
+          {...(onFollowup ? { onFollowup } : {})}
+        />
       </div>
     </section>
   );

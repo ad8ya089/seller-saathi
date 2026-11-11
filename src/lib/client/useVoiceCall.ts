@@ -94,6 +94,7 @@ export function useVoiceCall(): VoiceCall {
           session: (session): void => {
             sessionId.current = session.sessionId;
             dispatch({ type: 'session', session });
+            if (session.initialState) loadCommitted(session.initialState);
           },
           turn: (prefix): void => {
             dispatch({ type: 'turn', prefix });

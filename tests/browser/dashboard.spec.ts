@@ -205,7 +205,7 @@ test('390px: stacked layout, keyboard tabs, reduced motion and no horizontal ove
       .locator('.voice-orb')
       .evaluate((element) => getComputedStyle(element).animationName),
   ).toBe('none');
-  await page.getByRole('button', { name: 'Hindi', exact: true }).focus();
+  await page.getByRole('button', { name: 'Hindi', exact: true }).hover();
   await expect(page.getByRole('tooltip')).toBeVisible();
   await page.screenshot({
     path: resolve(screenshots, 'mobile-390-plan.png'),

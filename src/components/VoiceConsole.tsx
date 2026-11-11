@@ -24,7 +24,8 @@ export function VoiceConsole({
     voice.phase === 'processing' ||
     voice.phase === 'speaking';
   const label =
-    !voice.active && voice.agent?.phase === 'done'
+    !voice.active &&
+    (voice.agent?.phase === 'done' || voice.agent?.phase === 'DONE')
       ? 'Call complete'
       : voice.initializing && voice.phase !== 'speaking'
         ? 'Opening your session'
@@ -141,7 +142,7 @@ export function VoiceConsole({
         </div>
         {voice.agent && (
           <p className="mt-3 text-center text-xs capitalize text-slate-500">
-            Conversation: {voice.agent.phase}
+            Conversation: {voice.agent.phase.toLowerCase().replaceAll('_', ' ')}
           </p>
         )}
         {voice.phase === 'processing' && voice.tools.at(-1) && (

@@ -2,14 +2,19 @@ import type { ReactNode } from 'react';
 import type { AppState } from '@/lib/client/app-state';
 import { PlanActionCard } from '@/components/PlanActionCard';
 import { date } from '@/lib/client/format';
+import { FollowupPanel } from '@/components/FollowupPanel';
 
 export function PlanPanel({
   state,
   onConfirm,
+  onFollowup,
 }: {
   state: AppState;
   onConfirm: (decision: 'accept' | 'decline') => Promise<void>;
+  onFollowup?: (planId: string) => Promise<void>;
 }): ReactNode {
+  if (state.agent?.followup)
+    return <FollowupPanel state={state} onConfirm={onConfirm} />;
   const saved = state.agent?.committed === true;
   const record = saved ? state.committedPlan : null;
   const plan = saved ? record?.plan : state.agent?.plan;
@@ -85,6 +90,24 @@ export function PlanPanel({
         <p role="status" className="text-sm leading-6 text-amber-900">
           {state.ledgerError}
         </p>
+      )}
+      {record && onFollowup && (
+        <section className="rounded-xl border border-slate-200 p-4">
+          <p className="mb-3 text-sm text-slate-600">
+            Return for an illustrative simulated Day-7 review of this committed
+            plan.
+          </p>
+          <button
+            type="button"
+            className="button-secondary w-full"
+            disabled={state.active || busy}
+            onClick={(): void => {
+              void onFollowup(record.plan.id);
+            }}
+          >
+            Fast-forward 7 days
+          </button>
+        </section>
       )}
       <div className="space-y-3">
         {actions.map((action) => (

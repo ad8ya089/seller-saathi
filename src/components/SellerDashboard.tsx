@@ -67,6 +67,15 @@ export function SellerDashboard({
             state={voice}
             reference={reference}
             onConfirm={voice.confirmPlan}
+            onFollowup={async (planId): Promise<void> => {
+              setTab('plan');
+              await voice.startCall({
+                lang: voice.language,
+                mode: 'followup',
+                planId,
+                followupRunId: crypto.randomUUID(),
+              });
+            }}
             selected={tab}
             onSelect={setTab}
           />

@@ -1,29 +1,41 @@
 import type { Page } from '@playwright/test';
-import { dashboardFixture } from '../dashboard-fixtures';
-import { confirmRequestSchema } from '@/lib/agent/contracts';
+import {
+  dashboardFixture,
+  followupDashboardFixture,
+} from '../dashboard-fixtures';
+import {
+  confirmRequestSchema,
+  sessionRequestSchema,
+} from '@/lib/agent/contracts';
+import type { SessionRequest } from '@/lib/agent/contracts';
+import { callCopy, questionText } from '@/lib/domain/call-language';
+import { followupSpeech } from '@/lib/domain/followup-speech';
 import { textTurnSchema } from '@/lib/voice/events';
 import type { EchoEvent } from '@/lib/voice/events';
 import type { AgentState } from '@/lib/agent/contracts';
 import type { CommittedPlan } from '@/lib/domain/plan';
 import { spokenMoney } from '@/lib/domain/spoken-numbers';
 import { spokenActionTitles } from '@/lib/domain/plan-speech';
-import { QUESTION_BANK } from '@/lib/domain/questions';
 
 export interface MockBackend {
   confirmation: 'success' | 'failure' | 'pending';
   saved: CommittedPlan[];
   decisions: string[];
   sessions: number;
+  sessionInputs: SessionRequest[];
   release: () => void;
 }
 export async function installMockBackend(page: Page): Promise<MockBackend> {
   const fixture = dashboardFixture();
   let turn = 0;
+  let options: SessionRequest = { lang: 'en-IN', mode: 'call' };
+  let review: ReturnType<typeof followupDashboardFixture> | undefined;
   const backend: MockBackend = {
     confirmation: 'success',
     saved: [],
     decisions: [],
     sessions: 0,
+    sessionInputs: [],
     release: (): void => undefined,
   };
   // These interceptors and browser API fakes exist only in the test runner.
@@ -43,10 +55,26 @@ export async function installMockBackend(page: Page): Promise<MockBackend> {
       return;
     }
     backend.sessions++;
+    options = sessionRequestSchema.parse(route.request().postDataJSON());
+    backend.sessionInputs.push(options);
+    review =
+      options.mode === 'followup' && options.followupRunId
+        ? followupDashboardFixture(fixture.committed, options.followupRunId)
+        : undefined;
     turn = 0;
     await route.fulfill({
       json: {
         ...fixture.session,
+        lang: options.lang,
+        ...(review ? { initialState: review.initial } : {}),
+        greeting: {
+          ...fixture.session.greeting,
+          text:
+            review?.greeting ??
+            (options.lang === 'hi-IN'
+              ? 'Namaste, main aapka AI Virtual Account Manager hoon. Aaj main aapki kaise madad karun?'
+              : fixture.session.greeting.text),
+        },
         sessionId:
           backend.sessions === 1
             ? fixture.session.sessionId
@@ -75,9 +103,15 @@ export async function installMockBackend(page: Page): Promise<MockBackend> {
       });
       return;
     }
-    if (input.decision === 'accept') backend.saved = [fixture.committed];
+    if (input.decision === 'accept')
+      backend.saved = review
+        ? [review.committed, fixture.committed]
+        : [fixture.committed];
     await route.fulfill({
-      json: input.decision === 'accept' ? fixture.saved : fixture.declined,
+      json:
+        input.decision === 'accept'
+          ? (review?.saved ?? fixture.saved)
+          : fixture.declined,
     });
   });
   await page.route('**/api/turn', async (route): Promise<void> => {
@@ -88,7 +122,18 @@ export async function installMockBackend(page: Page): Promise<MockBackend> {
     ];
     let state: AgentState;
     let sentences: string[];
-    if (turn === 1) {
+    if (review) {
+      state = review.proposed;
+      if (!state.followup) throw new Error('Expected review view');
+      sentences = followupSpeech(state.followup, state.plan, options.lang);
+      events.push({
+        event: 'tool',
+        data: {
+          name: 'get_followup_status',
+          label: 'Reviewing illustrative action progress.',
+        },
+      });
+    } else if (turn === 1) {
       for (const [name, label] of [
         ['get_seller_snapshot', 'Checking your numbers.'],
         ['get_sku_breakdown', 'Checking stock by product.'],
@@ -99,8 +144,10 @@ export async function installMockBackend(page: Page): Promise<MockBackend> {
       }
       state = fixture.findings;
       sentences = [
-        `Sales fell from ${spokenMoney(fixture.data.seller.periods.last.sales)} to ${spokenMoney(fixture.data.seller.periods.this.sales)}, and stock shortages dominate cancellations.`,
-        QUESTION_BANK.Q_OOS_CONFIRM.text,
+        options.lang === 'hi-IN'
+          ? 'Stock ki kami dikh rahi hai.'
+          : `Sales fell from ${spokenMoney(fixture.data.seller.periods.last.sales)} to ${spokenMoney(fixture.data.seller.periods.this.sales)}, and stock shortages dominate cancellations.`,
+        questionText('Q_OOS_CONFIRM', options.lang, fixture.data),
       ];
     } else if (turn === 2) {
       events.push({
@@ -119,8 +166,10 @@ export async function installMockBackend(page: Page): Promise<MockBackend> {
         ),
       };
       sentences = [
-        'I have noted what you said about stock.',
-        QUESTION_BANK.Q_RESTOCK_ETA.text,
+        options.lang === 'hi-IN'
+          ? 'Stock ki baat note kar li hai.'
+          : 'I have noted what you said about stock.',
+        questionText('Q_RESTOCK_ETA', options.lang, fixture.data),
       ];
     } else {
       events.push({
@@ -132,10 +181,10 @@ export async function installMockBackend(page: Page): Promise<MockBackend> {
       });
       state = fixture.proposed;
       sentences = [
-        ...spokenActionTitles(fixture.committed.plan).map(
+        ...spokenActionTitles(fixture.committed.plan, options.lang).map(
           (title) => `${title}.`,
         ),
-        'Shall I save this plan?',
+        callCopy(options.lang).saveQuestion,
       ];
     }
     events.push(

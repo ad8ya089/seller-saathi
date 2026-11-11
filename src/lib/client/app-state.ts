@@ -188,6 +188,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         textFallback: state.textFallback,
         sessionId: action.session.sessionId,
         language: action.session.lang ?? state.language,
+        agent: action.session.initialState ?? null,
+        stableAgent: action.session.initialState ?? null,
         maxQuestions: action.session.config.maxQuestions,
         snapshot: snapshot.success ? snapshot.data : null,
         snapshotError: snapshot.success

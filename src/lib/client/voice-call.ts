@@ -155,6 +155,7 @@ export class VoiceCallController {
         );
         this.patch({
           phase: 'speaking',
+          agent: session.initialState ?? null,
           maxQuestions: session.config.maxQuestions,
           messages: [
             {
@@ -201,6 +202,8 @@ export class VoiceCallController {
         }
         if (this.current(call))
           this.patch({ phase: 'listening', initializing: false });
+        if (this.current(call) && session.initialState?.phase === 'DONE')
+          this.endCall();
       };
       call.opening = this.track(initialize());
     }
@@ -548,7 +551,10 @@ export class VoiceCallController {
             },
           ].slice(-10),
         });
-        if (this.state.agent?.phase === 'done') {
+        if (
+          this.state.agent?.phase === 'done' ||
+          this.state.agent?.phase === 'DONE'
+        ) {
           this.endCall();
         }
         if (this.current(call))
@@ -623,7 +629,7 @@ export class VoiceCallController {
       if (!this.current(call)) return;
       this.dependencies.observe?.confirmation(decision, 'complete', state);
       this.patch({ agent: state });
-      if (state.phase === 'done') {
+      if (state.phase === 'done' || state.phase === 'DONE') {
         this.endCall();
         return;
       }

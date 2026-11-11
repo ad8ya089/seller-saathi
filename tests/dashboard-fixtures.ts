@@ -8,6 +8,13 @@ import { computeDiagnosis } from '@/lib/domain/diagnosis';
 import type { CommittedPlan } from '@/lib/domain/plan';
 import { fixture } from './fixtures';
 import { wavFixture } from './voice/fixtures';
+import { auditActions } from '@/lib/domain/followup-audit';
+import {
+  buildFollowupPlan,
+  followupState,
+} from '@/lib/domain/followup-planning';
+import { captureFollowupView } from '@/lib/agent/followup-state';
+import { followupGreeting } from '@/lib/domain/followup-speech';
 
 export interface DashboardFixture {
   data: typeof fixture;
@@ -105,5 +112,97 @@ export function dashboardFixture(): DashboardFixture {
     saved: { ...proposed, phase: 'done', committed: true },
     declined,
     committed,
+  };
+}
+
+export function followupDashboardFixture(
+  original: CommittedPlan,
+  runId: string,
+): {
+  initial: AgentState;
+  proposed: AgentState;
+  saved: AgentState;
+  committed: CommittedPlan;
+  greeting: string;
+} {
+  const rows = auditActions(original, fixture.followup);
+  const state: Session = {
+    id: '22222222-2222-4222-8222-222222222222',
+    createdAt: 0,
+    lang: 'en-IN',
+    mode: 'followup',
+    phase: 'greeting',
+    turn: 0,
+    questionsAsked: [],
+    facts: {},
+    toolsCalled: new Set(),
+    hypotheses: [],
+    history: [],
+    lastUserText: '',
+    counters: {
+      sttCalls: 0,
+      ttsChars: 0,
+      llmCalls: 0,
+      tokens: { input: 0, output: 0, thoughts: 0 },
+    },
+    followup: {
+      original,
+      runId,
+      simulatedDate: '2026-11-17',
+      phase: 'AUDIT',
+      phaseTrace: ['FOLLOWUP_INTRO', 'AUDIT'],
+      rows,
+      auditQuestions: 1,
+      awaitingAcceptance: false,
+    },
+  };
+  captureFollowupView(state, fixture);
+  const initial = sessionState(state);
+  const plan = buildFollowupPlan(
+    followupState(fixture, rows, {}),
+    new Date('2026-11-17'),
+    `review-${runId}`,
+    original.plan.id,
+    runId,
+  );
+  if (!plan || !state.followup) throw new Error('Expected review fixture');
+  state.followup.phase = 'NEXT_STEPS';
+  state.followup.awaitingAcceptance = true;
+  state.followup.phaseTrace.push('RE_DIAGNOSE', 'NEXT_STEPS');
+  state.followup.audit = {
+    schemaVersion: 1,
+    event: 'followup_audited',
+    planId: original.plan.id,
+    runId,
+    simulatedDate: '2026-11-17',
+    recordedAt: '2026-11-11T12:00:00Z',
+    rows,
+    sellerQuote: 'Yes, the audit matches.',
+    facts: {},
+    phaseTrace: [...state.followup.phaseTrace],
+  };
+  state.hypotheses = computeDiagnosis(
+    followupState(fixture, rows, {}),
+  ).hypotheses;
+  state.proposedPlan = { plan, proposedAtTurn: 1 };
+  const proposed = sessionState(state);
+  const committed: CommittedPlan = {
+    schemaVersion: 1,
+    event: 'plan_committed',
+    plan,
+    committedAt: '2026-11-11T12:00:00Z',
+    acceptedActionIds: plan.actions.map((action) => action.id),
+  };
+  state.committedPlan = committed;
+  state.phase = 'done';
+  state.followup.phase = 'DONE';
+  state.followup.phaseTrace.push('DONE');
+  state.followup.awaitingAcceptance = false;
+  return {
+    initial,
+    proposed,
+    saved: sessionState(state),
+    committed,
+    greeting: followupGreeting(fixture.followup.windowDays, 'en-IN'),
   };
 }

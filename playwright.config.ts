@@ -27,6 +27,7 @@ export default defineConfig({
       HOSTNAME: '127.0.0.1',
       GEMINI_API_KEY: '',
       SARVAM_API_KEY: '',
+      HINGLISH_ENABLED: 'true',
       LOG_LEVEL: 'silent',
       DATA_DIR: resolve('.tmp/p4/browser-data'),
     },
