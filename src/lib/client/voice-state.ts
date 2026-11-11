@@ -3,6 +3,8 @@ import type { EchoEvent, EchoTimings } from '@/lib/voice/events';
 import type { EchoSubmission } from '@/lib/client/sse';
 import type { AudioQueue } from '@/lib/client/audio-queue';
 import type { AgentState, SessionResponse } from '@/lib/agent/contracts';
+import type { SessionRequest } from '@/lib/agent/contracts';
+import type { Language } from '@/lib/voice/language';
 import type { ErrorCode } from '@/lib/errors';
 
 export type VoicePhase = 'idle' | 'listening' | 'processing' | 'speaking';
@@ -19,6 +21,7 @@ export interface TurnMeasurement {
   failed: boolean;
 }
 export interface VoiceState {
+  language: Language;
   bargeIn: boolean;
   active: boolean;
   initializing: boolean;
@@ -36,6 +39,7 @@ export interface VoiceState {
 }
 export function initialVoiceState(): VoiceState {
   return {
+    language: 'en-IN',
     bargeIn: true,
     active: false,
     initializing: false,
@@ -69,7 +73,11 @@ export interface AudioResources {
   resume: () => Promise<void>;
   suspend: () => Promise<void>;
   close: () => Promise<void>;
-  speakFallback: (text: string, signal: AbortSignal) => Promise<void>;
+  speakFallback: (
+    text: string,
+    signal: AbortSignal,
+    language?: Language,
+  ) => Promise<void>;
   openMicrophone: (
     callbacks: MicrophoneCallbacks,
     signal: AbortSignal,
@@ -88,11 +96,14 @@ export interface VoiceDependencies {
     ) => void;
   };
   reportFiller?: (sessionId: string, turn: number) => void;
-  loadClips?: () => Promise<ClipBundle>;
+  loadClips?: (language?: Language) => Promise<ClipBundle>;
   createAudio: () => AudioResources;
   createId: () => string;
   now: () => number;
-  openSession: (signal: AbortSignal) => Promise<SessionResponse>;
+  openSession: (
+    signal: AbortSignal,
+    input?: SessionRequest,
+  ) => Promise<SessionResponse>;
   endSession: (sessionId: string) => Promise<void>;
   confirmPlan: (
     sessionId: string,

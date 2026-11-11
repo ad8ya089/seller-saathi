@@ -63,6 +63,7 @@ export class AudioCache {
   }
   snapshot(): ClipBundle {
     return clipBundleSchema.parse({
+      language: this.identity.language,
       state: this.state,
       clips: Object.fromEntries(
         Object.keys(CLIP_TEXT).map((name) => [

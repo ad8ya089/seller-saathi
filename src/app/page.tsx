@@ -11,14 +11,22 @@ export default async function Home({
 }): Promise<ReactNode> {
   const { debug } = await searchParams;
   let reference: DashboardReference | null = null;
+  let hinglishEnabled = false;
   // Warm once on the first dynamic page request, before the Call gesture.
   // This avoids provider work during the production build or missing-key boot.
   try {
     const runtime = getRuntime();
+    hinglishEnabled = runtime.config.hinglishEnabled;
     runtime.warmGreeting();
     reference = dashboardReference(await runtime.data(), runtime.config);
   } catch {
     /* Health and call routes report configuration errors. */
   }
-  return <SellerDashboard reference={reference} debug={debug === '1'} />;
+  return (
+    <SellerDashboard
+      reference={reference}
+      debug={debug === '1'}
+      hinglishEnabled={hinglishEnabled}
+    />
+  );
 }

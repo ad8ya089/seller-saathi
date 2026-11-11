@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { languageSchema } from '@/lib/voice/language';
 import type { Language } from '@/lib/voice/language';
 
 export const CLIP_TEXT = {
@@ -25,6 +26,7 @@ export function clipText(
   return language === 'hi-IN' ? HINDI_CLIP_TEXT : CLIP_TEXT;
 }
 export const clipBundleSchema = z.strictObject({
+  language: languageSchema.optional(),
   state: z.enum(['unconfigured', 'pending', 'ready', 'degraded']),
   clips: z.record(
     z.enum(['filler', 'reprompt', 'apology', 'turns', 'time', 'daily']),

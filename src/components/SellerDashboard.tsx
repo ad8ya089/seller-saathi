@@ -13,9 +13,11 @@ import { number } from '@/lib/client/format';
 export function SellerDashboard({
   reference,
   debug = false,
+  hinglishEnabled = false,
 }: {
   reference: DashboardReference | null;
   debug?: boolean;
+  hinglishEnabled?: boolean;
 }): ReactNode {
   const voice = useVoiceCall();
   const [tab, setTab] = useState<DashboardTab>('snapshot');
@@ -24,7 +26,13 @@ export function SellerDashboard({
       <a href="#workspace" className="skip-link">
         Skip to workspace
       </a>
-      <AppHeader debug={debug} />
+      <AppHeader
+        debug={debug}
+        language={voice.language}
+        onLanguage={voice.setLanguage}
+        languageLocked={voice.active || voice.initializing}
+        hinglishEnabled={hinglishEnabled}
+      />
       <main
         id="workspace"
         tabIndex={-1}

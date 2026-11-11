@@ -118,6 +118,75 @@ const echoEvents: EchoEvent[] = [
   },
 ];
 
+describe('immutable call language', () => {
+  it('sends Hindi session options, refuses a live change and starts a separate English call', async () => {
+    const app = rig();
+    const original = await app.deps.openSession(new AbortController().signal);
+    const open = vi
+      .fn<VoiceDependencies['openSession']>()
+      .mockImplementation((_signal, input) =>
+        Promise.resolve({
+          ...original,
+          lang: input?.lang ?? 'en-IN',
+          greeting: {
+            ...original.greeting,
+            text:
+              input?.lang === 'hi-IN'
+                ? 'Namaste, main AI assistant hoon.'
+                : 'Hello, I am an AI assistant.',
+          },
+        }),
+      );
+    app.deps.openSession = open;
+    app.controller.setLanguage('hi-IN');
+    await app.controller.startCall();
+    expect(open.mock.calls[0]?.[1]?.lang).toBe('hi-IN');
+    app.controller.setLanguage('en-IN');
+    expect(app.controller.snapshot().language).toBe('hi-IN');
+    app.controller.endCall();
+    app.controller.setLanguage('en-IN');
+    await app.controller.startCall();
+    expect(open.mock.calls[1]?.[1]?.lang).toBe('en-IN');
+    expect(app.controller.snapshot().messages[0]?.text).toContain('Hello');
+    await app.controller.dispose();
+  });
+  it('emits the existing fallback and retains Hindi text when greeting audio is unavailable', async () => {
+    const app = rig();
+    const original = await app.deps.openSession(new AbortController().signal);
+    const event = vi.fn<NonNullable<VoiceDependencies['observe']>['event']>();
+    app.deps.observe = {
+      session: vi.fn(),
+      turn: vi.fn(),
+      event,
+      error: vi.fn(),
+      confirmation: vi.fn(),
+    };
+    app.deps.openSession = (): Promise<SessionResponse> =>
+      Promise.resolve({
+        ...original,
+        lang: 'hi-IN',
+        greeting: {
+          text: 'Namaste, main AI assistant hoon.',
+          audioB64: null,
+          mime: 'audio/wav',
+        },
+      });
+    app.controller.setLanguage('hi-IN');
+    await app.controller.startCall();
+    expect(event.mock.calls[0]?.[1]).toMatchObject({
+      event: 'fallback',
+      data: { kind: 'tts' },
+    });
+    expect(app.controller.snapshot().messages[0]?.text).toContain('Namaste');
+    expect(app.audio.speakFallback).toHaveBeenCalledWith(
+      'Namaste, main AI assistant hoon.',
+      expect.any(AbortSignal),
+      'hi-IN',
+    );
+    await app.controller.dispose();
+  });
+});
+
 describe('full-duplex interruption', () => {
   it.each([0, 1])(
     'reports only %i actually completed sentences and suppresses stale audio',

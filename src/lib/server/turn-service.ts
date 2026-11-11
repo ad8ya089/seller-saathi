@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { AppError } from '@/lib/errors';
 import { cloneSession, replaceSession } from '@/lib/agent/session';
+import type { Session } from '@/lib/agent/session';
 import { applyPlaybackReceipt } from '@/lib/agent/interruption';
 import { runTurn } from '@/lib/agent/orchestrator';
 import type { TurnEnvironment, TurnMetrics } from '@/lib/agent/orchestrator';
@@ -24,9 +25,9 @@ interface Running {
   fingerprint: string;
   result: Promise<Completed>;
 }
-export type AgentEnvironmentFactory = () => Promise<
-  Omit<TurnEnvironment, 'signal' | 'onCommitPoint'>
->;
+export type AgentEnvironmentFactory = (
+  session: Session,
+) => Promise<Omit<TurnEnvironment, 'signal' | 'onCommitPoint'>>;
 export interface CompletedTurnReport {
   sessionId: string;
   turn: number;
@@ -116,7 +117,7 @@ export class TurnService {
             emit(event);
           };
           try {
-            const environment = await this.environment();
+            const environment = await this.environment(draft);
             metrics = await runTurn(draft, input, forward, {
               ...environment,
               onMetrics: (partial): void => {

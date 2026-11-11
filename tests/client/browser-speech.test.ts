@@ -10,6 +10,37 @@ class Utterance {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('browser voice fallback', () => {
+  it('uses an installed Hindi voice and never substitutes an English-only voice', async () => {
+    const speak = vi.fn<(utterance: Utterance) => void>();
+    vi.stubGlobal('SpeechSynthesisUtterance', Utterance);
+    vi.stubGlobal('speechSynthesis', {
+      speak,
+      cancel: vi.fn(),
+      getVoices: () => [{ lang: 'hi-IN' }],
+    });
+    const running = speakBrowserFallback(
+      'Samajh gaya.',
+      new AbortController().signal,
+      'hi-IN',
+    );
+    expect(speak.mock.calls[0]?.[0].lang).toBe('hi-IN');
+    speak.mock.calls[0]?.[0].onend?.();
+    await running;
+    speak.mockClear();
+    vi.stubGlobal('speechSynthesis', {
+      speak,
+      cancel: vi.fn(),
+      getVoices: () => [{ lang: 'en-IN' }],
+    });
+    await expect(
+      speakBrowserFallback(
+        'Samajh gaya.',
+        new AbortController().signal,
+        'hi-IN',
+      ),
+    ).rejects.toMatchObject({ code: 'AUDIO_PLAYBACK' });
+    expect(speak).not.toHaveBeenCalled();
+  });
   it('speaks English-India and resolves only after playback ends', async () => {
     const speak = vi.fn<(utterance: Utterance) => void>();
     vi.stubGlobal('SpeechSynthesisUtterance', Utterance);

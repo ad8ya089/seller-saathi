@@ -1,7 +1,12 @@
 import { withAccess } from '@/lib/client/access';
 import { z } from 'zod';
 import { AppError } from '@/lib/errors';
-import { agentStateSchema, sessionResponseSchema } from '@/lib/agent/contracts';
+import {
+  agentStateSchema,
+  sessionResponseSchema,
+  sessionRequestSchema,
+} from '@/lib/agent/contracts';
+import type { SessionRequest } from '@/lib/agent/contracts';
 import type { AgentState, SessionResponse } from '@/lib/agent/contracts';
 import { abortable, throwIfAborted } from '@/lib/voice/abort';
 import { httpError } from '@/lib/client/sse';
@@ -39,9 +44,10 @@ async function jsonPost(
 }
 export async function openVoiceSession(
   signal: AbortSignal,
+  input: SessionRequest = { lang: 'en-IN', mode: 'call' },
 ): Promise<SessionResponse> {
   const result = sessionResponseSchema.safeParse(
-    await jsonPost('/api/session', { lang: 'en-IN', mode: 'call' }, signal),
+    await jsonPost('/api/session', sessionRequestSchema.parse(input), signal),
   );
   if (!result.success)
     throw new AppError(

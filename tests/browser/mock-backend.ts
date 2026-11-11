@@ -142,6 +142,9 @@ export async function installMockBackend(page: Page): Promise<MockBackend> {
       { event: 'state', data: state },
       { event: 'state', data: state },
     );
+    const audioB64 = fixture.session.greeting.audioB64;
+    if (audioB64 === null)
+      throw new Error('The English browser fixture requires audio');
     sentences.forEach((text, idx) =>
       events.push(
         { event: 'sentence', data: { idx, text } },
@@ -150,7 +153,7 @@ export async function installMockBackend(page: Page): Promise<MockBackend> {
           data: {
             idx,
             mime: 'audio/wav',
-            b64: fixture.session.greeting.audioB64,
+            b64: audioB64,
           },
         },
       ),

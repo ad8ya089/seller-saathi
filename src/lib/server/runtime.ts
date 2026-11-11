@@ -17,12 +17,26 @@ import { businessDate } from '@/lib/server/business-date';
 import type { SellerData } from '@/lib/domain/data-schemas';
 import type { ToolEnvironment } from '@/lib/agent/tools';
 import type { AgentServices } from '@/lib/server/agent-api';
+import { languageSchema, sarvamProfile } from '@/lib/voice/language';
+import type { Language } from '@/lib/voice/language';
+import type { TtsProvider } from '@/lib/voice/providers';
 
 export class AppRuntime implements AgentServices {
   readonly config = getConfig();
   readonly sessions = getSessionStore(this.config);
-  private readonly voice = createSarvamProviders(this.config.sarvam);
-  private readonly limitedTts = new TtsLimiter(this.voice.tts);
+  private readonly voices = {
+    'en-IN': createSarvamProviders(this.config.sarvam, 'en-IN'),
+    'hi-IN': createSarvamProviders(this.config.sarvam, 'hi-IN'),
+  };
+  private readonly routedTts: TtsProvider = {
+    synthesize: (text, language, signal) =>
+      this.voices[languageSchema.parse(language)].tts.synthesize(
+        text,
+        language,
+        signal,
+      ),
+  };
+  private readonly limitedTts = new TtsLimiter(this.routedTts);
   private readonly llm = new Gemini(this.config.gemini);
   readonly limiter = new TokenBucket(
     this.config.rateLimitTurns,
@@ -34,13 +48,21 @@ export class AppRuntime implements AgentServices {
     { ...this.config.sarvam.tts, language: 'en-IN' },
     this.config.providers.sarvam,
   );
-  readonly greeting = new GreetingCache(this.limitedTts);
+  readonly greeting = new GreetingCache(this.limitedTts, {
+    english: this.config.sarvam.tts,
+    hindi: this.config.sarvam.hindi.tts,
+  });
+  private readonly hindiClips = new AudioCache(
+    this.limitedTts,
+    { ...this.config.sarvam.hindi.tts, language: 'hi-IN' },
+    this.config.providers.sarvam && this.config.hinglishEnabled,
+  );
   private loaded: Promise<SellerData> | undefined;
   readonly turns = new TurnService(
     this.sessions,
-    async () => ({
+    async (session) => ({
       llm: this.llm,
-      stt: this.voice.stt,
+      stt: this.voices[session.lang].stt,
       tts: this.limitedTts,
       maxToolRounds: this.config.maxToolRounds,
       compactToolHistory: this.config.compactToolHistory,
@@ -48,9 +70,13 @@ export class AppRuntime implements AgentServices {
     }),
     Date.now,
     (report) => {
+      const profile = sarvamProfile(
+        this.config.sarvam,
+        report.metrics.language ?? 'en-IN',
+      );
       report.metrics.providerModels = {
-        stt: this.config.sarvam.stt.model,
-        tts: this.config.sarvam.tts.model,
+        stt: profile.stt.model,
+        tts: profile.tts.model,
       };
       const value = getMetrics().record(
         report.sessionId,
@@ -92,9 +118,12 @@ export class AppRuntime implements AgentServices {
   ledger(): ReturnType<AgentServices['ledger']> {
     return listLatest(20, this.config.dataDir);
   }
-  warmClips(): void {
+  clipsFor(language: Language): AudioCache {
+    return language === 'hi-IN' ? this.hindiClips : this.clips;
+  }
+  warmClips(language: Language = 'en-IN'): void {
     if (this.budget.snapshot().accepted < this.config.dailyTurnCap)
-      void this.clips.warm();
+      void this.clipsFor(language).warm();
   }
   warmGreeting(): void {
     if (

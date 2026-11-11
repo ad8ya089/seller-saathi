@@ -167,6 +167,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         active: voice.active,
+        language: voice.language,
         initializing: voice.initializing,
         phase: voice.phase,
         textFallback: voice.textFallback,
@@ -186,6 +187,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         phase: state.phase,
         textFallback: state.textFallback,
         sessionId: action.session.sessionId,
+        language: action.session.lang ?? state.language,
         maxQuestions: action.session.config.maxQuestions,
         snapshot: snapshot.success ? snapshot.data : null,
         snapshotError: snapshot.success

@@ -26,9 +26,11 @@ import { parseEchoInput, readJsonInput } from '@/lib/server/turn-input';
 import { publicVoiceError } from '@/lib/server/voice-errors';
 import { echoSseResponse } from '@/lib/server/sse';
 import { throwIfAborted } from '@/lib/voice/abort';
+import type { Language } from '@/lib/voice/language';
+import { HINDI_GREETING } from '@/lib/server/greeting';
 
 export interface AgentServices {
-  warmClips?: () => void;
+  warmClips?: (language?: Language) => void;
   limiter?: TokenBucket;
   budget?: DailyBudget;
   sessions: SessionStore;
@@ -83,7 +85,12 @@ export function createSessionHandler(
     try {
       assertSameOrigin(request, services.config);
       assertAccess(request, services.config);
-      sessionRequestSchema.parse(await readJsonInput(request));
+      const input = sessionRequestSchema.parse(await readJsonInput(request));
+      if (input.lang === 'hi-IN' && !services.config.hinglishEnabled)
+        throw new AppError(
+          'INVALID_INPUT',
+          'Hindi/Hinglish speech has not been enabled after provider verification',
+        );
       if (
         services.budget &&
         services.budget.snapshot().accepted >= services.budget.snapshot().cap
@@ -98,15 +105,26 @@ export function createSessionHandler(
       if (!services.config.providers.gemini)
         throw new AppError('PROVIDER_CONFIG', 'Gemini is not configured');
       const [greeting, data] = await Promise.all([
-        services.greeting.get(request.signal),
+        services.greeting
+          .get(request.signal, input.lang)
+          .catch((error: unknown) => {
+            throwIfAborted(request.signal);
+            if (input.lang !== 'hi-IN') throw error;
+            return {
+              text: HINDI_GREETING,
+              audioB64: null,
+              mime: 'audio/wav' as const,
+            };
+          }),
         services.data(),
       ]);
       throwIfAborted(request.signal);
-      services.warmClips?.();
-      const session = services.sessions.create();
+      services.warmClips?.(input.lang);
+      const session = services.sessions.create({ lang: input.lang });
       return Response.json(
         sessionResponseSchema.parse({
           sessionId: session.id,
+          lang: session.lang,
           greeting,
           snapshot: sellerSnapshot(session, data, services.config),
           config: {

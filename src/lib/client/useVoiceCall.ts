@@ -9,6 +9,8 @@ import { VoiceCallController } from '@/lib/client/voice-call';
 import { appReducer, initialAppState } from '@/lib/client/app-state';
 import type { AppState } from '@/lib/client/app-state';
 import type { AgentState } from '@/lib/agent/contracts';
+import type { SessionRequest } from '@/lib/agent/contracts';
+import type { Language } from '@/lib/voice/language';
 import { postEchoTurn } from '@/lib/client/sse';
 import { waitForRetry } from '@/lib/voice/abort';
 import { CALL_SETTINGS } from '@/lib/client/vad-settings';
@@ -20,8 +22,9 @@ import {
 } from '@/lib/client/session-api';
 
 export interface VoiceCall extends AppState {
+  setLanguage: (language: Language) => void;
   setBargeIn: (enabled: boolean) => void;
-  startCall: () => Promise<void>;
+  startCall: (input?: SessionRequest) => Promise<void>;
   endCall: () => void;
   sendText: (text: string) => Promise<boolean>;
   confirmPlan: (decision: 'accept' | 'decline') => Promise<void>;
@@ -70,10 +73,10 @@ export function useVoiceCall(): VoiceCall {
             body: JSON.stringify({ sessionId, turn }),
           }).catch(() => undefined);
         },
-        loadClips: async (): Promise<ClipBundle> =>
+        loadClips: async (language = 'en-IN'): Promise<ClipBundle> =>
           clipBundleSchema.parse(
             await (
-              await fetch('/api/clips', {
+              await fetch(`/api/clips?lang=${language}`, {
                 headers: withAccess(),
                 cache: 'no-store',
               })
@@ -135,10 +138,13 @@ export function useVoiceCall(): VoiceCall {
   );
   return {
     ...state,
+    setLanguage: (language): void => {
+      controller().setLanguage(language);
+    },
     setBargeIn: (enabled): void => {
       controller().setBargeIn(enabled);
     },
-    startCall: (): Promise<void> => controller().startCall(),
+    startCall: (input): Promise<void> => controller().startCall(input),
     endCall: (): void => {
       reference.current?.endCall();
     },

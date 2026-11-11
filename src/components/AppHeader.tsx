@@ -1,6 +1,19 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-export function AppHeader({ debug }: { debug: boolean }): ReactNode {
+import type { Language } from '@/lib/voice/language';
+export function AppHeader({
+  debug,
+  language = 'en-IN',
+  onLanguage,
+  languageLocked = false,
+  hinglishEnabled = false,
+}: {
+  debug: boolean;
+  language?: Language;
+  onLanguage?: (language: Language) => void;
+  languageLocked?: boolean;
+  hinglishEnabled?: boolean;
+}): ReactNode {
   return (
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-[1320px] flex-wrap items-center gap-x-3 gap-y-3 px-4 py-4 sm:px-6 lg:gap-x-5 lg:px-8 lg:py-5">
@@ -31,17 +44,26 @@ export function AppHeader({ debug }: { debug: boolean }): ReactNode {
           >
             <button
               type="button"
-              aria-pressed="true"
-              className="rounded-md bg-white px-2 py-2 font-semibold text-slate-800 shadow-sm lg:px-3"
+              aria-pressed={language === 'en-IN'}
+              disabled={languageLocked}
+              onClick={(): void => {
+                onLanguage?.('en-IN');
+              }}
+              className={`rounded-md px-2 py-2 lg:px-3 ${language === 'en-IN' ? 'bg-white font-semibold text-slate-800 shadow-sm' : 'text-slate-600'}`}
             >
               English
             </button>
             <div className="group relative">
               <button
                 type="button"
-                aria-disabled="true"
+                aria-disabled={!hinglishEnabled || languageLocked}
+                disabled={!hinglishEnabled || languageLocked}
+                aria-pressed={language === 'hi-IN'}
+                onClick={(): void => {
+                  onLanguage?.('hi-IN');
+                }}
                 aria-describedby="hindi-hint"
-                className="cursor-not-allowed rounded-md px-2 py-2 text-slate-500 lg:px-3"
+                className={`rounded-md px-2 py-2 lg:px-3 ${language === 'hi-IN' ? 'bg-white font-semibold text-slate-800 shadow-sm' : 'text-slate-600'} disabled:cursor-not-allowed`}
               >
                 Hindi
               </button>
@@ -50,7 +72,9 @@ export function AppHeader({ debug }: { debug: boolean }): ReactNode {
                 role="tooltip"
                 className="pointer-events-none absolute top-full right-0 z-20 mt-2 hidden w-48 rounded-lg bg-slate-900 p-3 text-xs leading-5 text-white shadow-lg group-hover:block group-focus-within:block"
               >
-                English is available now. Hindi is coming in a later version.
+                {hinglishEnabled
+                  ? 'Roman-script Hinglish mixes Hindi with English business words. Start a fresh call to change language.'
+                  : 'Hindi/Hinglish is disabled until its provider profile passes verification.'}
               </span>
             </div>
           </div>

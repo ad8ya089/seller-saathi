@@ -6,6 +6,7 @@ import {
   hypothesisSchema,
 } from '@/lib/domain/types';
 import type { Session } from '@/lib/agent/session';
+import { languageSchema } from '@/lib/voice/language';
 
 export const agentStateSchema = z.strictObject({
   phase: phaseSchema,
@@ -33,23 +34,31 @@ export function sessionState(session: Session): AgentState {
   });
 }
 export const sessionRequestSchema = z.strictObject({
-  lang: z.literal('en-IN').default('en-IN'),
+  lang: languageSchema.default('en-IN'),
   mode: z.literal('call').default('call'),
 });
-export const sessionResponseSchema = z.strictObject({
-  sessionId: z.uuid(),
-  greeting: z.strictObject({
-    text: z.string().min(1),
-    audioB64: z.base64().min(1),
-    mime: z.literal('audio/wav'),
-  }),
-  snapshot: z.record(z.string(), z.unknown()),
-  config: z.strictObject({
-    maxUtteranceMs: z.number().int().positive().max(28000),
-    bargeIn: z.boolean(),
-    maxQuestions: z.number().int().min(1).max(3),
-  }),
-});
+export type SessionRequest = z.infer<typeof sessionRequestSchema>;
+export const sessionResponseSchema = z
+  .strictObject({
+    sessionId: z.uuid(),
+    lang: languageSchema.optional(),
+    greeting: z.strictObject({
+      text: z.string().min(1),
+      audioB64: z.base64().min(1).nullable(),
+      mime: z.literal('audio/wav'),
+    }),
+    snapshot: z.record(z.string(), z.unknown()),
+    config: z.strictObject({
+      maxUtteranceMs: z.number().int().positive().max(28000),
+      bargeIn: z.boolean(),
+      maxQuestions: z.number().int().min(1).max(3),
+    }),
+  })
+  .refine(
+    (response) =>
+      response.greeting.audioB64 !== null || response.lang === 'hi-IN',
+    { message: 'English greeting audio must be present' },
+  );
 export type SessionResponse = z.infer<typeof sessionResponseSchema>;
 export const confirmRequestSchema = z.strictObject({
   sessionId: z.uuid(),

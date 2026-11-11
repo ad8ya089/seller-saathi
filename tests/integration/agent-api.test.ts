@@ -99,6 +99,35 @@ function proposed(services: AgentServices): ReturnType<SessionStore['create']> {
   return session;
 }
 describe('agent HTTP boundaries', () => {
+  it('creates Hindi only after its verification gate and keeps greetings separate from English', async () => {
+    const tts = new FakeTts(wavFixture({ sampleRate: 24000 }));
+    const services = await rig(tts);
+    services.config.hinglishEnabled = true;
+    const handler = createSessionHandler(services);
+    const response = await handler(request('session', { lang: 'hi-IN' }));
+    const hindi = sessionResponseSchema.parse(await response.json());
+    expect(hindi.lang).toBe('hi-IN');
+    expect(hindi.greeting.text).toContain('Namaste');
+    expect(services.sessions.get(hindi.sessionId).lang).toBe('hi-IN');
+    await handler(request('session', { lang: 'en-IN' }));
+    expect(tts.calls.map((call) => call.lang)).toEqual(['hi-IN', 'en-IN']);
+  });
+  it('retains Hindi greeting text during synthesis failure without changing English failure behavior', async () => {
+    const services = await rig(
+      new FakeTts(wavFixture({ sampleRate: 24000 }), {
+        error: new AppError('PROVIDER_UNAVAILABLE', 'private provider body'),
+      }),
+    );
+    services.config.hinglishEnabled = true;
+    const response = await createSessionHandler(services)(
+      request('session', { lang: 'hi-IN' }),
+    );
+    expect(response.status).toBe(200);
+    const body = sessionResponseSchema.parse(await response.json());
+    expect(body.greeting.audioB64).toBeNull();
+    expect(body.greeting.text).toContain('Namaste');
+    expect(JSON.stringify(body)).not.toContain('private provider body');
+  });
   it('creates server sessions, caches the AI greeting and rejects unsupported language/contracts', async () => {
     const tts = new FakeTts(wavFixture({ sampleRate: 24000 }));
     const services = await rig(tts);

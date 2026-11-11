@@ -1,4 +1,7 @@
-import { CLIP_TEXT } from '@/lib/voice/clips';
+import { clipText } from '@/lib/voice/clips';
+import type { Language } from '@/lib/voice/language';
+import { sessionRequestSchema } from '@/lib/agent/contracts';
+import type { SessionRequest } from '@/lib/agent/contracts';
 import type { ClipBundle, ClipName } from '@/lib/voice/clips';
 import { Filler } from '@/lib/client/filler';
 import { AppError } from '@/lib/errors';
@@ -18,6 +21,7 @@ import { CALL_SETTINGS } from '@/lib/client/vad-settings';
 import { TurnPlayback } from '@/lib/client/turn-playback';
 
 interface Call {
+  options: SessionRequest;
   id: string;
   abort: AbortController;
   queue: AudioQueue;
@@ -79,15 +83,14 @@ export class VoiceCallController {
     clearTimeout(call.captureTimer);
     delete call.captureTimer;
   }
-  private newCall(textFallback: boolean): Call {
+  private newCall(textFallback: boolean, input?: SessionRequest): Call {
+    const options = sessionRequestSchema.parse(
+      input ?? { lang: this.state.language, mode: 'call' },
+    );
     this.audio ??= this.dependencies.createAudio();
-    void this.dependencies
-      .loadClips?.()
-      .then((bundle) => {
-        this.clips = bundle;
-      })
-      .catch(() => undefined);
+    this.clips = undefined;
     const call: Call = {
+      options,
       id: this.dependencies.createId(),
       abort: new AbortController(),
       queue: this.audio.createQueue(),
@@ -101,8 +104,16 @@ export class VoiceCallController {
       captureMs: CALL_SETTINGS.maxCaptureMs,
     };
     this.call = call;
+    void this.dependencies
+      .loadClips?.(options.lang)
+      .then((bundle) => {
+        if (this.current(call) && (bundle.language ?? 'en-IN') === options.lang)
+          this.clips = bundle;
+      })
+      .catch(() => undefined);
     this.patch({
       ...initialVoiceState(),
+      language: options.lang,
       bargeIn: this.state.bargeIn,
       active: true,
       phase: 'listening',
@@ -116,13 +127,21 @@ export class VoiceCallController {
     if (!call.opening) {
       const initialize = async (): Promise<void> => {
         this.patch({ initializing: true, phase: 'processing' });
-        const session = await this.dependencies.openSession(call.abort.signal);
+        const session = await this.dependencies.openSession(
+          call.abort.signal,
+          call.options,
+        );
         if (!this.current(call)) {
           void this.dependencies
             .endSession(session.sessionId)
             .catch(() => undefined);
           return;
         }
+        if ((session.lang ?? 'en-IN') !== call.options.lang)
+          throw new AppError(
+            'STREAM_INVALID',
+            'The session language did not match the selected call',
+          );
         call.id = session.sessionId;
         call.ready = true;
         call.duplex = session.config.bargeIn;
@@ -145,11 +164,38 @@ export class VoiceCallController {
             },
           ],
         });
-        await call.queue.enqueue(session.greeting.audioB64);
-        await call.queue.whenIdle();
+        if (session.greeting.audioB64) {
+          await call.queue.enqueue(session.greeting.audioB64);
+          await call.queue.whenIdle();
+        } else {
+          const fallback = {
+            event: 'fallback' as const,
+            data: {
+              kind: 'tts' as const,
+              message:
+                'Hindi voice is unavailable. The greeting text remains available.',
+            },
+          };
+          this.dependencies.observe?.event(`${call.id}-greeting`, fallback);
+          this.patch({ notice: fallback.data.message });
+          try {
+            await this.audio?.speakFallback(
+              session.greeting.text,
+              call.abort.signal,
+              call.options.lang,
+            );
+          } catch {
+            /* Text remains available without an installed Hindi voice. */
+          }
+        }
         try {
-          const clips = await this.dependencies.loadClips?.();
-          if (clips && this.current(call)) this.clips = clips;
+          const clips = await this.dependencies.loadClips?.(call.options.lang);
+          if (
+            clips &&
+            this.current(call) &&
+            (clips.language ?? 'en-IN') === call.options.lang
+          )
+            this.clips = clips;
         } catch {
           /* Browser speech remains the controlled cache fallback. */
         }
@@ -165,11 +211,11 @@ export class VoiceCallController {
     }
   }
 
-  async startCall(): Promise<void> {
+  async startCall(input?: SessionRequest): Promise<void> {
     if (this.disposed || this.call) return;
     let call: Call | undefined;
     try {
-      call = this.newCall(false);
+      call = this.newCall(false, input);
       this.patch({ initializing: true });
       const resume = this.audio?.resume();
       await resume;
@@ -355,7 +401,12 @@ export class VoiceCallController {
         if (b64) {
           await queue.enqueue(b64);
           await queue.whenIdle();
-        } else await audio.speakFallback(CLIP_TEXT.filler, signal);
+        } else
+          await audio.speakFallback(
+            clipText(call.options.lang).filler,
+            signal,
+            call.options.lang,
+          );
       },
       1500 - Math.max(0, this.dependencies.now() - endedAt),
       (): void => {
@@ -378,7 +429,8 @@ export class VoiceCallController {
         this.patch(update);
       },
       queue: call.queue,
-      speakFallback: audio.speakFallback,
+      speakFallback: (text, signal): Promise<void> =>
+        audio.speakFallback(text, signal, call.options.lang),
       signal,
       now: this.dependencies.now,
       endedAt,
@@ -451,7 +503,12 @@ export class VoiceCallController {
           if (b64) {
             await call.queue.enqueue(b64);
             await call.queue.whenIdle();
-          } else await audio.speakFallback(CLIP_TEXT[clip], signal);
+          } else
+            await audio.speakFallback(
+              clipText(call.options.lang)[clip],
+              signal,
+              call.options.lang,
+            );
         } catch {
           /* The visible text error remains available. */
         }
@@ -529,6 +586,9 @@ export class VoiceCallController {
         error: 'Microphone paused. You can still type a message.',
       });
     });
+  }
+  setLanguage(language: Language): void {
+    if (!this.call && !this.state.initializing) this.patch({ language });
   }
 
   private interrupt(call: Call): void {
