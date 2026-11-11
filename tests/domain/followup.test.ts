@@ -40,6 +40,17 @@ describe('Day-7 deterministic review', () => {
       rows,
     );
     expect(correctAudit(rows, 'Stock sync is done?')).toEqual(rows);
+    expect(
+      correctAudit(rows, 'Agar stock sync done ho toh plan save karo.'),
+    ).toEqual(rows);
+    expect(
+      correctAudit(rows, 'अगर स्टॉक सिंक हो गया तो प्लान सेव करो।'),
+    ).toEqual(rows);
+    expect(
+      correctAudit(rows, 'Stock sync is almost done.').find(
+        (row) => row.id === 'A_STOCK_SYNC',
+      )?.status,
+    ).toBe('partial');
     expect(correctAudit(rows, 'Stock sync is not partial.')).toEqual(rows);
     expect(
       correctAudit(rows, 'Stock sync has never been done.').find(

@@ -34,7 +34,7 @@ export function correctAudit(
   // Literal declarative corrections only. Instructions, questions and conditional reports
   // cannot promote sample evidence into seller-reported completion.
   if (
-    /[?？]|\b(ignore|pretend|mark|set|override|rules|if|unless|maybe|would|should|will)\b/i.test(
+    /[?？]|\b(ignore|pretend|mark|set|override|rules|if|unless|maybe|would|should|will|agar|shayad|maan lo|dikhao)\b|अगर|शायद|मान लो|दिखाओ/i.test(
       quote,
     )
   )
@@ -60,7 +60,9 @@ export function correctAudit(
           )
         )
           return undefined;
-        if (/\b(partial|partly|partially|aadha)\b|आधा/u.test(clause))
+        if (
+          /\b(partial|partly|partially|aadha|almost|nearly)\b|आधा/u.test(clause)
+        )
           return 'partial';
         if (
           /\b(done|completed|finished|ho gaya|kar diya)\b|हो गया|कर दिया/u.test(
