@@ -1,11 +1,11 @@
 # 06 — Deployment preparation
 
-Current candidate: [Render Free manual runbook](12-render-free-runbook.md),
-following [the deployment reassessment](09-deployment-reassessment.md). No card
-or paid upgrade is authorized. Northflank and Cloud Run are historical alternatives;
-GCP setup stopped and the EC2 material below is historical. Roster Sync is off-limits.
-Render Free uses temporary demo storage; only explicit local volume mounts provide
-the local persistence described below.
+Current deployment: [SellerSaathi on Render](https://seller-saathi.onrender.com/).
+The author reports deployed English voice verification and a completed submission
+recording. Follow the [Render runbook](12-render-free-runbook.md); the platform
+assessment and EC2 material below are historical preparation records. Render Free
+uses temporary demo storage; explicit local volume mounts provide the local
+persistence described below.
 
 P6 packages SellerSaathi for EC2; it does not provision or publish it. Follow the complete [EC2 runbook](../deploy/aws-ec2/README.md). Actual local results and remaining gates are in the [P6 report](p6-report.md). These replace the original untested deployment snippets.
 

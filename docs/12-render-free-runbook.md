@@ -1,5 +1,20 @@
 # 12 — Render Free manual runbook
 
+## Current deployment
+
+The live English demo is [seller-saathi.onrender.com](https://seller-saathi.onrender.com/).
+The project author reports a successful deployed voice test and recorded submission
+video. The final repository audit received HTTP 200 and ok=true from `/api/health`;
+provider flags indicate configuration, not connectivity or the deployed Git SHA.
+Hindi/Hinglish remains outside the demonstrated scope and disabled in deployment.
+
+The preparation record below predates that deployment. Its historical local
+probe findings and setup instructions are retained for reference; they are not
+the current deployment status. See the later [health investigation](p7.7-health-diagnostic.md)
+for the distinction between Docker probe cost and external HTTP readiness.
+
+## Original preparation record
+
 Prepared 2026-11-12 for a no-card evaluation attempt. No Render login, CLI/API,
 resource creation, payment method, GitHub connection, push or provider call was
 performed by this preparation. The operator performs dashboard and public tests.

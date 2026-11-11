@@ -1,6 +1,14 @@
 # 09 — Deployment reassessment
 
-## Current candidate — Render Free (P7.7)
+## Current deployment
+
+[SellerSaathi is deployed on Render](https://seller-saathi.onrender.com/). The
+author reports successful English voice testing and a recorded submission video.
+The repository audit confirmed public health HTTP 200; it did not repeat paid
+provider tests or establish the deployed Git SHA. See the [current runbook](12-render-free-runbook.md).
+Earlier assessments below remain historical; no new deployment is required by this audit.
+
+## Historical candidate — Render Free (P7.7)
 
 On 2026-11-12 the operator selected a no-card Render Free attempt. Follow
 [docs/12](12-render-free-runbook.md) and [the constrained report](p7.7-render-preflight-report.md).

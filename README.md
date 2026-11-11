@@ -1,155 +1,201 @@
-# SellerSaathi — Snapdeal Virtual KAM
+# SellerSaathi — Voice-First AI Virtual Key Account Manager
 
-Current hosting candidate: [Render Free](docs/12-render-free-runbook.md), with
-no card or paid upgrade. See [local preflight evidence](docs/p7.7-render-preflight-report.md)
-before the operator creates a service. Earlier platform findings below are history.
-Readiness is conditional: direct HTTP checks passed, while Docker's built-in
-process probe timed out at 0.1 CPU. Public Render health and real voice remain unverified.
+A voice-first seller recovery assistant that investigates declining sales, identifies operational bottlenecks and builds an actionable recovery plan with explicit seller approval.
 
-## Historical Northflank account findings
+**[Open SellerSaathi Live Demo](https://seller-saathi.onrender.com/)**
 
-The operator reports that this account's Free team dashboard permits only
-**Europe West / London (`europe-west`)** and **US Central / Council Bluffs
-(`us-central`)**. Europe West is the recommended free-region candidate.
-Delhi (`asia-south-delhi`) and the other Asia-Pacific regions display a requirement
-to upgrade to pay as you go under this account. Do not upgrade to select Delhi.
-These are operator-observed account UI findings, not a claim that every account
-has the same regional entitlement.
+![SellerSaathi dashboard showing the Virtual KAM conversation and synthetic seller sales snapshot](docs/assets/seller-saathi-dashboard.png)
 
-For users in India, London is expected to add network round-trip delay compared
-with a nearby India region. Voice turns involve sequential browser/server and
-server/provider requests, so the audible effect depends on routing and provider
-locations. No numeric latency increase or first-audio result has been measured;
-verify actual public voice/SSE behavior from India before claiming performance.
+_Actual application UI captured locally with Playwright, test-only mocked API responses and committed synthetic fixtures. The screenshot illustrates the interface; it does not depict a live provider conversation._
 
-Before creating the service, independently verify that **nf-compute-50
-(0.5 vCPU / 1 GB)** is available to this Sandbox account and included in its
-remaining allowance. The advertised **$20 allowance** and **$12 plan price** alone
-do not establish account-level eligibility or guarantee no charges. Existing stop
-conditions for declined cards, paid upgrades, unclear billing, unexpected costs
-and overages remain in force.
+## Overview
 
-The starting local revision for this correction is `c0260c5`. The current reviewed
-local commit, including this correction, must be published to GitHub before
-Northflank can build it from `main`. Publication requires separate explicit push
-approval; nothing is pushed or connected by this documentation change.
+When sales fall, a seller needs to understand what changed before deciding what to do. SellerSaathi compares order volume, prices, cancellations and stock availability, explains the evidence, and asks only the questions that can change the recovery plan.
 
-## Implementation status — P7 language and simulated Day-7 review
+Built for the Snapdeal Mini Virtual KAM assignment, the prototype connects a natural voice conversation to deterministic business analysis and a visible commitment workflow.
 
-SellerSaathi runs the seller recovery conversation: local Silero VAD → WAV → Sarvam STT → Gemini function calls → guarded deterministic domain tools → sentence-streamed Sarvam TTS → Web Audio. The responsive dashboard pairs that conversation with Snapshot, Diagnosis and Recovery Plan tabs. Metrics, evidence, confidence, seller statements and commitments update from server data. Server sessions enforce phases, three investigation questions, eligible plans and explicit acceptance before a JSONL commitment. All seller data is mock data; saved plans do not change Snapdeal systems.
+## Live demo
 
-Use Node.js 22.12 or later within Node 22 and npm. From the repository root:
+Visit **[seller-saathi.onrender.com](https://seller-saathi.onrender.com/)** in Chrome, allow microphone access and click **Call Virtual KAM**. Start with: “My sales have dropped this month.”
 
-```sh
+The demonstrated workflow is English. The hosted voice conversation has been tested and the submission video recorded by the project author. Render Free may need time to wake after inactivity; this is an evaluation deployment, not production infrastructure.
+
+## Key features
+
+- **Two-way voice:** self-hosted Silero speech detection, Sarvam transcription and sentence-streamed speech playback through Web Audio.
+- **Evidence-backed diagnosis:** deterministic sales calculations, stock and cancellation analysis, ranked hypotheses and at most three investigation questions.
+- **Practical plans:** two or three eligible seller actions with owners, due dates, success metrics and a seven-day KAM checkpoint.
+- **Verified commitment:** explicit acceptance, phase-filtered tools, ownership and eligibility checks, idempotent writes and a bounded JSONL demo ledger.
+- **Visible progress:** Snapshot, Diagnosis and Recovery Plan tabs update alongside the conversation; saved state follows successful server-side persistence.
+- **Conversation controls:** interruption/barge-in, optional half-duplex mode, text fallback, session limits and usage controls.
+- **Illustrative Day-7 review:** audit an accepted plan against synthetic follow-up data; further commitments require fresh consent.
+
+## How it works
+
+1. The seller starts a call and describes the sales decline.
+2. The agent retrieves the synthetic seller snapshot, SKU detail and cancellation breakdown.
+3. Domain functions calculate changes and rank evidence-backed hypotheses. Gemini coordinates permitted tool calls and the spoken explanation.
+4. The agent asks targeted follow-up questions, records the seller's answers and proposes eligible actions.
+5. The seller accepts or rejects the proposal. Only verified explicit acceptance permits a commitment.
+6. After a successful ledger append, the dashboard shows accepted actions, ownership, dates and the follow-up checkpoint.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Browser[Microphone and Silero VAD] --> WAV[WAV capture]
+    WAV --> STT[Sarvam STT]
+    STT --> Agent[Gemini function-calling agent]
+    Agent <--> Tools[Guarded tools and deterministic TypeScript domain]
+    Tools --> Ledger[Consent-verified JSONL commitment]
+    Agent --> SSE[Incremental SSE sentences and audio]
+    TTS[Sarvam TTS] --> SSE
+    Agent --> TTS
+    SSE --> Playback[Browser Web Audio and dashboard]
+```
+
+One Next.js service owns the server-side orchestration. The LLM handles conversation and tool selection; domain code owns the calculations, question policy and action eligibility. Server guards verify consent and ownership before persistence. Provider adapters sit behind interfaces with offline fakes for tests.
+
+Sessions live in a process-local Map with TTL. Commitments and follow-up audits append to bounded JSONL files. There is no database, vector store, RAG pipeline or multi-agent framework. VAD/ONNX assets are served locally rather than from a runtime CDN.
+
+## Technology stack
+
+| Technology                                | Responsibility                                           |
+| ----------------------------------------- | -------------------------------------------------------- |
+| Next.js 16.4.6 / React 19.3.1             | Application UI, server routes and standalone service     |
+| TypeScript 6.0.3 / Zod 4.6.7              | Strict types and runtime boundary validation             |
+| Node.js 22                                | Server runtime                                           |
+| Google Gemini / Google GenAI SDK          | Conversation and function calling                        |
+| Sarvam AI                                 | Speech-to-text and text-to-speech                        |
+| Silero VAD / ONNX Runtime Web / Web Audio | Browser speech detection, capture and playback           |
+| Tailwind CSS 4                            | Responsive dashboard styling                             |
+| Vitest 5.1 / Playwright 1.65              | Offline domain/integration tests and Chrome verification |
+| Docker Compose / Render                   | Local container workflow and hosted demo                 |
+
+Exact dependency versions are pinned in `package-lock.json`. Model and voice profile IDs are environment-configured; validated defaults are in `.env.example`.
+
+## Seller data and demonstration scenario
+
+The assignment's headline comparison is:
+
+| Metric                | Last month | This month |
+| --------------------- | ---------- | ---------- |
+| Gross sales           | ₹2,00,000  | ₹1,35,000  |
+| Orders                | 400        | 270        |
+| Cancellation rate     | 8%         | 14%        |
+| Average selling price | ₹500       | ₹500       |
+| Out-of-stock products | 5          | 18         |
+
+Sales and orders decline by 32.5% while ASP stays flat. The gross sales bridge attributes the ₹65,000 decline to order volume, with zero price effect.
+
+The additional shop identity, SKU-level stock/orders, cancellation reasons and Day-7 fixture are synthetic. In that SKU scenario, three zero-stock listings account for 123 of the 130 lost gross orders (94.6%); stock availability is the leading diagnosis. Impressions, clicks, conversion rates and competitor prices are unavailable and are not invented.
+
+The English S1 path confirms whether the out-of-stock products are regular bestsellers and asks when fresh stock will arrive. Expected actions are priority restocking, matching panel stock to physical stock, and focusing on available bestsellers. Recovery amounts, when shown, are conditional ceilings rather than forecasts.
+
+## Trust, consent and data boundaries
+
+- All seller business data is mock data; this is an assignment prototype.
+- There is no connection to Snapdeal internal systems or seller APIs. No real inventory, listing, order or account setting is changed.
+- Actions are recommendations. Saving creates a demo commitment record only, after verified explicit seller acceptance.
+- The server checks phases, permitted actions, consent evidence and ownership. Failed writes never produce a successful saved confirmation.
+- The Day-7 review is illustrative and uses synthetic follow-up data. It preserves the original commitment and requires fresh consent for new actions.
+- On Render Free, sessions and the temporary ledger can disappear after idle shutdown, restart or redeployment. Local Compose uses a named ledger volume.
+
+## Run locally
+
+Prerequisites: **Node.js 22.12 or newer within Node 22**, npm 10+, and Chrome for voice use.
+
+```bash
+git clone https://github.com/ad8ya089/seller-saathi.git
+cd seller-saathi
 npm ci
-# Copy .env.example to .env and privately set GEMINI_API_KEY and SARVAM_API_KEY.
+```
+
+Create your private `.env` from `.env.example` without overwriting an existing file. In PowerShell:
+
+```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+```
+
+On macOS/Linux, use `cp -n .env.example .env`. Privately add the two provider keys described below, then start:
+
+```bash
 npm run dev
 ```
 
-Open `http://localhost:3000/?debug=1` in Chrome. Click Call, allow the microphone and hear the AI greeting. Explain a sales drop, answer the stock and restock questions, review the spoken plan and explicitly accept it. Interruptions are enabled by default. Turn off Allow interruptions to use half-duplex capture, which pauses during processing/playback and resumes after a short cooldown. End Call cancels server work and releases microphone tracks. English-India is the P3 call language. Localhost or HTTPS is required for microphone access. Debug measures the last VAD speech frame to scheduled playback; device output delay is not measured.
+Open **http://localhost:3000/**, click **Call Virtual KAM** and grant microphone permission. If that port is occupied, use the local URL printed by Next.js. Browser microphone access requires localhost or HTTPS. Headphones help avoid speaker feedback. Turning off **Allow interruptions** selects half-duplex capture; **Can't use the microphone?** opens text input.
 
-Use the tabs alongside the call to inspect the business comparison, evidence behind each hypothesis and action owners/dates. Confirm Plan and Not Now use the existing guarded API. Saved status appears only after server confirmation; the accepted actions and actual follow-up date are read from the ledger. The footer contains the documented assumptions. English is the default; Hindi/Hinglish remains disabled until the operator verifies its provider profile and enables `HINGLISH_ENABLED`. P3's measured Chrome median first audio was **11.77 seconds**. The P5 single-turn HTTP pilot measured **13.93 seconds**, with a different measurement boundary; no voice-latency improvement or twenty-sample gate is claimed. See the [P5 report](docs/p5-report.md).
+For a local standalone build, use `npm run build` followed by `npm start`.
 
-`npm ci` copies pinned VAD/ONNX assets into ignored `public/vad/` through postinstall; the app configures local URLs for all four assets. `npm run smoke:sarvam -- --preflight` prints the English audition scope; live runs require `--confirm-spend`. The smaller `--hinglish --preflight` path plans only one short TTS request and one STT request from its synthetic audio, with retries disabled. Private WAVs stay under `.data/audition/`; aggregate observations go in [provider notes](docs/provider-notes.md). Ordinary tests use fakes and reject live network calls.
+### Optional Docker Compose
 
-Production locally: `npm run build`, then `npm start`. Startup copies static assets and mock data into the generated standalone directory and launches its server. Set `PORT` and `HOSTNAME` in `.env` or the shell. Set an absolute `DATA_DIR` when sharing the same ledger between development, CLI and standalone: the generated standalone server changes its working directory. Run `npm run lint`, `npm run typecheck`, `npm test`, `npm run verify-data`, and `npm run build` for verification. `npm run test:watch` starts Vitest watch mode.
+With Docker Desktop/Engine running and the private `.env` prepared:
 
-`/api/health` reports provider **configuration**, not connectivity, and the live in-memory session count. It returns HTTP 200 with absent optional credentials and HTTP 503 for invalid explicit configuration. `/api/session` creates the UUID used by `/api/turn`; every turn also needs a client UUID `turnId`. Identical retries replay for 60 seconds within a bounded audio cache. An expired/evicted ID is rejected without repeating provider work. Sessions are process-local and capped at 25 turns, ten active minutes and a 30-minute idle TTL. Accepted attempts also consume the process-local daily budget, resetting at midnight Asia/Kolkata; it resets on restart. `DATA_DIR` is writable ledger storage; `MOCK_DATA_DIR` is the read-only fixture source. Server modules use the `server-only` marker.
-
-`npm run chat` opens the real Gemini text REPL. `npm run chat -- --scenario S1` runs the scripted seller acceptance check without speech providers and writes its synthetic trace under ignored `.data/chat/`. `npm run smoke:gemini` verifies a small signed function-call round trip on the configured primary model; `-- --fallback` explicitly tests the configured fallback. Both commands use paid providers. Ordinary tests use fakes. `eval` and `bench` now provide bounded real-provider runners. They print preflight usage and require `--confirm-spend`; ordinary tests remain offline. See the [P3 report](docs/p3-report.md) for real-provider traces, measured latency and manual-check limits.
-
-After `npm run build`, run `npm run test:browser` for the dashboard and P5 interruption Chrome suite. It starts a separate standalone server on port 4200 with provider keys empty and mocks requests in Playwright only. It requires Google Chrome installed. Production has no fake-provider activation path. Screenshots, accessibility scores and the P4 verification details are in the [P4 report](docs/p4-report.md).
-
-The current candidate is **Render Free**, Singapore only if offered on Free: one Docker Web Service, 512 MB/0.1 CPU, runtime port 10000, no card or paid upgrade. Follow the [Render runbook](docs/12-render-free-runbook.md) and [constrained report](docs/p7.7-render-preflight-report.md). Provider keys are entered manually only when the user chooses paid usage. Free hosting does not make Gemini/Sarvam free. Never bypass idle sleep with pings.
-
-The unchanged Dockerfile and local Compose remain available. Configure the exact generated `DOMAIN`, conservative `PROXY_MODE=caddy`, daily cap 50 and temporary `/tmp/kam` ledger. Sessions/data may disappear on sleep/restart/deploy. Keyless checks do not establish real-call peak memory. A failed constrained gate stops the attempt; consider laptop-hosted Tailscale Funnel separately. Earlier hosting plans are historical. Roster Sync remains off-limits. No push/deployment occurs here.
-
-```sh
-# Fresh checkout only; preserve an existing .env.
-cp .env.example .env
-docker compose up --build -d --wait
-# App binds localhost:3000; set APP_PORT if already occupied.
-docker compose down # retains the ledger volume
+```bash
+docker compose up --build -d --wait app
 ```
 
-See [P1 decisions](docs/p1-decisions.md) for resolved documentation conflicts and policy choices. The design pack below describes the complete planned application, including work beyond P1.
+The default mapping is **127.0.0.1:3000 → container 3000**. `APP_PORT` can select another host port if needed. Compose mounts the named `kamdata` volume at `/data` for local ledger persistence. Render's container port 10000 is a separate hosting setting; it is not the development default.
 
-Voice-first **Seller Recovery Agent**: a seller says "my sales dropped"; the bot reads their numbers, finds the real driver, asks ≤3 plan-changing questions, proposes 2–3 owned actions, saves the plan on a verified spoken "yes", and sets a 7-day review.
+To stop this local Compose project while keeping its volume:
 
-## P5 controls and paid runners
-
-The server caches six English recovery clips and the greeting, limits TTS to two shared slots, limits unverified peers to a shared token bucket unless a trusted proxy identifies their IP, and enforces the daily attempt cap before providers. Optional access codes are entered by the user and checked on the server. Set `INTERNAL_METRICS_TOKEN` privately for bearer-authenticated `/api/health?verbose=1`; Host/forwarded headers never grant verbose access. Debug reads actual per-session metrics. No exchange rate or missing bill is invented.
-
-```sh
-npm run eval -- --preflight
-npm run eval -- --persona S1 --runs 1 --max-tokens 600000 --max-requests 60 --confirm-spend
-npm run bench -- --count 1 --preflight
-npm run bench -- --count 1 --base-url http://localhost:3000 --generate-fixtures --confirm-spend
+```bash
+docker compose down
 ```
 
-Run paid commands only after reviewing their preflight and approving the spend. P7 adds S8: the full scope is now ten personas times three runs (30), with a 27/30 gate. Earlier P5 pilots and the interim 25/27 gate do not satisfy it. WAV generation skips existing fixtures and validates 3–8 second PCM recordings. Private evaluation ledgers/traces and benchmark details stay under ignored `.data/`. The selected synthetic recording in `tests/fixtures/voice/` is deliberately committed. `COMPACT_TOOL_HISTORY=false` is the default. The opt-in completed-tool summary reduced history bytes in the pilot, but that evaluation failed before saving; it remains disabled pending a successful live acceptance check. Model Content, signatures, proposals and commitment results remain preserved in either mode.
+## Environment variables
 
-## P7 language and follow-up
+| Variable         | Purpose                                                |
+| ---------------- | ------------------------------------------------------ |
+| `GEMINI_API_KEY` | Required for real conversational model calls           |
+| `SARVAM_API_KEY` | Required for real transcription and synthesized speech |
 
-Hindi calls use immutable `hi-IN` sessions, a respectful Roman-script Hinglish prompt, preserved literal transcripts, Hindi-aware fact/consent guards and separate language/configuration audio caches. `.env.example` documents the configurable `SARVAM_HI_*` profile. Technical provider verification and physical listening quality are separate checks; see [P7 results and manual checklist](docs/p7-report.md).
+Use the committed `.env.example` defaults for the English model/voice profile and other settings. Keep `.env` private and out of Git. Missing keys allow health checks but do not enable a real call. `/api/health` reports configuration booleans, not provider connectivity.
 
-After saving a plan, **Fast-forward 7 days** opens an illustrative review of that exact durable commitment. Only accepted seller actions are audited. The original plan is unchanged; audit records append to `DATA_DIR/followup-audits.jsonl`. The separate review phases audit progress, recompute the deterministic diagnosis and propose at most two eligible actions. New actions need fresh explicit acceptance. Order pace, overall cancellations and remaining stock come from the unchanged synthetic fixture; cancellation reasons and a new monthly recovery forecast are unavailable.
+With both providers configured, the first homepage request can synthesize a cached greeting and six recovery clips before Call. Real conversations and cache warm-up can incur provider charges. Local offline tests use fakes and do not require keys.
 
-```sh
-npm run smoke:sarvam -- --hinglish --preflight
-# Only after approving the two-request paid scope:
-npm run smoke:sarvam -- --hinglish --confirm-spend
-npm run eval -- --persona S8 --runs 1 --preflight
-# Live S8 needs fresh approval and --confirm-spend.
-npm run eval -- --scenario followup --fake
-npm run eval -- --scenario followup --preflight
+## Verification and tests
+
+```bash
+npm run lint
+npm run typecheck
+npm test
+npm run verify-data
+npm run build
+npm run test:browser
 ```
 
-F1 is a separate Day-7 evaluation, seeded by a guarded synthetic S1 commitment. Its default fake path makes no external calls; the optional live text-only path requires its own `--confirm-spend`. It does not contribute to the 30-run persona gate.
+Run the browser command after the production build; Google Chrome must be installed. Its isolated server uses port 4200, empty provider keys and test-only mocked requests. The suite covers business-data invariants, diagnosis, action eligibility, consent/ownership, idempotency, failed persistence, incremental SSE, cancellation, dashboard states, interruption and synthetic follow-up reviews.
 
-The cost/infra figures in the original design pack below are historical planning inputs. Current model-specific price units, verification dates and measurement limits are recorded in the P5 report.
+Offline verification is distinct from live provider evaluation and measured production capacity. Live smoke tests, persona evaluations and latency benchmarks are intentionally not part of these commands.
 
-## Files
+## Project structure
 
-| File                                         | Purpose                                                                                          |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `AGENTS.md`                                  | Rules Codex follows in the repo (conventions, commands, hard constraints)                        |
-| `prompt.md`                                  | Step 0 + 8 ordered Codex prompts with acceptance checks and a 24 h plan                          |
-| `docs/01-problem-analysis.md`                | Brief vs email requirements, data maths, hypotheses, assumptions A1–A10                          |
-| `docs/02-product-and-conversation-design.md` | State machine, diagnosis rules, question bank, action catalog, system prompt, UI, demo narrative |
-| `docs/03-architecture.md`                    | Components, turn pipeline, API/SSE contracts, tools & guards, chunker, failure matrix, security  |
-| `docs/04-tech-decisions.md`                  | Decisions with rejected options, cost model, references                                          |
-| `docs/05-data-spec.md`                       | Exact mock data, invariants, 10 test personas                                                    |
-| `docs/06-deployment.md`                      | AWS EC2 + Docker + Caddy + DuckDNS: files, runbook, checklist                                    |
-| `docs/07-test-and-eval-plan.md`              | Test pyramid, persona evals, latency bench, voice QA, release gate                               |
-| `docs/08-submission-pack.md`                 | Email, one-page note, recording script, interview Q&A                                            |
+```text
+src/app/          Pages, styles and HTTP/SSE routes
+src/components/   Voice console and seller dashboard panels
+src/lib/agent/    Conversation phases, prompts, tool policy and guards
+src/lib/domain/   Pure calculations, diagnosis, questions and action plans
+src/lib/llm/      Gemini adapter and test fake
+src/lib/voice/    Speech adapters, WAV contracts and audio helpers
+src/lib/client/   Browser voice state, VAD and playback
+src/lib/server/   Config, sessions, ledger and request orchestration
+data/            Assignment metrics and synthetic supporting fixtures
+tests/           Unit, integration, browser and diagnostic tooling
+scripts/         Verification and local development utilities
+docs/            Product, architecture, data and deployment documentation
+```
 
-## Decisions (defended in docs/04)
+## Current scope and limitations
 
-Cascaded voice pipeline · Sarvam Saaras STT + Bulbul TTS · Gemini 3.5 Flash-Lite with tools · deterministic TypeScript diagnosis engine · one Next.js service, in-memory sessions + JSONL ledger · hands-free VAD, sentence-streamed TTS, barge-in · EC2 t4g.small Mumbai + Caddy + DuckDNS · ≈ ₹6–7 per 4-minute call · ≈ $13.5/month infra.
+English is the demonstrated voice workflow. Hindi/Hinglish is disabled in the demonstrated deployment; its existing implementation and tests are outside the demonstrated language scope.
 
-## What I changed from the earlier plan (and why)
+Render Free can sleep after inactivity, and hosted session/ledger data is temporary. Live voice latency and availability depend on Gemini/Sarvam and the hosting environment. Provider usage is charged separately from hosting. The prototype offers synthetic-data recommendations and demo commitments, not production Snapdeal operations.
 
-1. **Deadline:** brief says **24 h**, email says 48 h → plan for 24 h.
-2. **LLM:** `gemini-2.5-flash-lite` → **`gemini-3.5-flash-lite`** (current, GA 21 Jul 2026), fallback `gemini-3.6-flash`; the 2.5 family is being retired/rerouted (1 Dec 2026), and preview TTS/live IDs already have shutdown dates. Model IDs are env-configured.
-3. **Sarvam pricing corrected:** TTS is ₹30 per 10K chars (₹3/1K), not ₹1/1K; STT ₹30/hour. Per-call cost ≈ ₹6–7 (was ₹3.5–4.5).
-4. **P2 provider correction:** current docs recommend `bulbul:v4-flash` and `saaras:v4`. Live smoke accepted five v4 persona speakers and both v4/v3 STT in `transcribe`/`codemix`. REST TTS uses `language_code`; details and observations are in `docs/provider-notes.md`.
-5. **Per-turn JSON response → streaming plain text + tool calls.** A JSON blob can't be spoken until complete; this keeps validation and restores streaming.
-6. **Voice mechanics upgraded** (30 marks): hands-free VAD, sentence-pipelined TTS, barge-in, cached greeting/fillers.
-7. **Sharper analysis:** net-of-cancellation bridge (−₹67,900; 88% volume / 12% cancellations) and Pareto insight (3 of 60 listings ≈ 95% of lost orders) built into the data design.
-8. **Ownership made concrete:** verified-quote commit guard, ledger, follow-up checkpoint, optional Day-7 call.
-9. **Deployment:** kept EC2+Caddy+DuckDNS (your verified pattern), but build on-instance with swap (as in Roster Sync) instead of adding a GHCR pipeline; Mumbai region; no access-code wall (caps instead).
-10. **Cut:** Seller Health Score, localStorage sessions, WebSocket stack, anything multi-seller.
+## Further reading
 
-## Verification status and remaining checks
-
-- Gemini minimal thinking and signed tool continuation passed the live P3 smoke; the final S1 run also used the configured fallback successfully. See `docs/provider-notes.md`.
-- P2 manual Chrome testing was reported complete in the P3 brief. The P3 Chrome run supplied three completed voice turns and a saved-plan screen; see the P3 report for the exact evidence and listening limits.
-- Sarvam free credits (docs say ₹100; one page says ₹1,000) → dashboard.
-- Papers cited in docs/04 were from the earlier research pass; re-read before quoting.
-- P6 Docker, Caddy and local HTTPS checks passed; AWS bootstrap, public source-IP trust and cloud/reboot acceptance await a separately approved deployment. See the P6 report.
-- Brief's "1–2 hours expected effort" vs this scope: the core path (P1–P3 + minimal UI) already satisfies the brief; everything after is differentiation. Don't let it threaten the deadline.
-
-## Start
-
-P1–P7 are local, with P6 limited to deployment preparation. Paid P5 runs were limited to pilots at the user's request: the full persona gate, 20-turn benchmark and remaining recordings are pending. The approved S1 simulator pilot failed (0/1); its explicit-consent rejection was fixed offline and awaits a live rerun. The separate scripted S1 baseline passed. Physical speaker/headphone and language QA are unverified. Deployment packaging and P7 do not satisfy those release gates. No P8 work is included.
+- [Product and conversation design](docs/02-product-and-conversation-design.md)
+- [Architecture and API contracts](docs/03-architecture.md)
+- [Data specification and assumptions](docs/05-data-spec.md)
+- [Technical decisions](docs/04-tech-decisions.md)
+- [Render deployment runbook](docs/12-render-free-runbook.md)
