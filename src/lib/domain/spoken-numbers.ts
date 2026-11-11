@@ -1,3 +1,4 @@
+import type { Language } from '@/lib/voice/language';
 const SMALL = [
   'zero',
   'one',
@@ -63,8 +64,11 @@ export function spokenNumber(value: number): string {
     .split('.');
   return `${value < 0 ? 'minus ' : ''}${integer(Number(whole))}${decimal ? ` point ${SMALL[Number(decimal)] ?? ''}` : ''}`;
 }
-export function spokenMoney(value: number): string {
-  return `${spokenNumber(value)} rupees`;
+export function spokenMoney(
+  value: number,
+  language: Language = 'en-IN',
+): string {
+  return `${spokenNumber(value)} ${language === 'hi-IN' ? 'rupaye' : 'rupees'}`;
 }
 export function spokenPercent(value: number): string {
   return `${spokenNumber(value)} percent`;

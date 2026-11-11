@@ -44,7 +44,7 @@ const TEXT_RULES: readonly {
   },
   {
     code: 'SKU_CODE',
-    pattern: /\b[A-Z]{3}-\d{3}\b/i,
+    pattern: /\b[A-Z]{3}-\p{N}{3}(?!\p{N})/iu,
     message: 'Use product names instead of SKU codes.',
   },
   {
@@ -69,7 +69,7 @@ export function lintSpeech(text: string, phase: Phase): SpeechValidation {
   const limits = PHASE_LIMITS[phase] ?? DEFAULT_LIMITS;
   const words = trimmed.split(/\s+/).length;
   const sentences = trimmed
-    .split(/[.!?।]+(?:\s+|$)/u)
+    .split(/(?:[.!?]+(?:\s+|$)|[।॥]+)/u)
     .filter((part) => part.trim()).length;
   const questions = (text.match(/\?/g) ?? []).length;
   if (words > limits.words)

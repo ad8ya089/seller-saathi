@@ -33,6 +33,29 @@ export function diagnosisFor(
 export function spokenEvidence(session: Session, data: SellerData): string[] {
   if (!session.toolsCalled.has('get_seller_snapshot')) return [];
   const { last, this: current } = data.seller.periods;
+  if (session.lang === 'hi-IN') {
+    const evidence = [
+      `Sales ${spokenMoney(last.sales, session.lang)} se ${spokenMoney(current.sales, session.lang)} hui.`,
+      'Average prices same rahe.',
+    ];
+    if (session.toolsCalled.has('get_sku_breakdown')) {
+      const inventory = inventoryMetrics(data.seller, data.skus);
+      evidence.push(
+        `${spokenNumber(inventory.oosCount)} out of stock products mein lost orders ka ${spokenPercent(inventory.concentrationPct)} hai.`,
+      );
+    }
+    if (session.toolsCalled.has('get_cancellation_breakdown')) {
+      const cancellations = cancellationMetrics(data.cancellations);
+      evidence.push(
+        `${spokenPercent(cancellations.stockPct)} cancellations stock unavailable hone se hue.`,
+      );
+      if (cancellations.stockPct >= DEFAULT_THRESHOLDS.stockCancelPct)
+        evidence.push(
+          `Sales ${spokenMoney(last.sales, session.lang)} se ${spokenMoney(current.sales, session.lang)} hui; cancellations mein stock ki dikkat zyada hai.`,
+        );
+    }
+    return evidence;
+  }
   const evidence = [
     `Sales fell from ${spokenMoney(last.sales)} to ${spokenMoney(current.sales)}.`,
     'Average prices stayed the same.',

@@ -1,13 +1,15 @@
 import type { QuestionId, SellerFact } from '@/lib/domain/types';
 import { QUESTION_BANK } from '@/lib/domain/questions';
 import { spokenNumber } from '@/lib/domain/spoken-numbers';
+import type { Language } from '@/lib/voice/language';
+import { hindiAcceptance, hindiFact } from '@/lib/agent/hindi-evidence';
 
 export function normalizeEvidence(value: string): string {
   return value
     .normalize('NFKC')
     .toLowerCase()
     .replace(/[’']/g, '')
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/[^\p{L}\p{M}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -18,9 +20,14 @@ export function supportsQuote(quote: string, utterance: string): boolean {
     ` ${normalizeEvidence(utterance)} `.includes(` ${normalized} `)
   );
 }
-export function verifiedAcceptance(quote: string, utterance: string): boolean {
+export function verifiedAcceptance(
+  quote: string,
+  utterance: string,
+  language: Language = 'en-IN',
+): boolean {
   if (!supportsQuote(quote, utterance) || /\?/.test(utterance)) return false;
   const text = normalizeEvidence(utterance);
+  if (language === 'hi-IN' && hindiAcceptance(text)) return true;
   if (
     /\b(no|not|dont|never|cannot|cant|maybe|later|if|unless|but|however|only|ignore|override|rules|first|tell|explain)\b/.test(
       text,
@@ -65,11 +72,19 @@ export function supportsFact(
   fact: SellerFact,
   utterance: string,
   question?: QuestionId,
+  language: Language = 'en-IN',
 ): boolean {
   if (!supportsQuote(fact.quote, utterance)) return false;
   if (fact.factId === 'can_restock_partial' && /\?/.test(fact.quote))
     return false;
   const text = normalizeEvidence(fact.quote);
+  const answeringHindi =
+    question !== undefined &&
+    QUESTION_BANK[question].records.includes(fact.factId);
+  if (language === 'hi-IN') {
+    const verified = hindiFact(fact, text, answeringHindi);
+    if (verified !== undefined) return verified;
+  }
   if (
     /^(yes|yeah|sure|okay|ok)\b/.test(text) &&
     /\b(but|not|no|dont|cannot|cant)\b/.test(normalizeEvidence(utterance))

@@ -4,6 +4,7 @@ import type { TtsProvider, TtsResult } from '@/lib/voice/providers';
 import { validateWav } from '@/lib/voice/wav';
 import { VOICE_LIMITS } from '@/lib/voice/limits';
 import type { EmitEchoEvent } from '@/lib/voice/events';
+import type { Language } from '@/lib/voice/language';
 
 export type PreparedAudio = { ok: true; result: TtsResult } | { ok: false };
 export class SpeechPipeline {
@@ -22,13 +23,14 @@ export class SpeechPipeline {
     private readonly signal: AbortSignal,
     private readonly started: number,
     private readonly now: () => number = performance.now.bind(performance),
+    private readonly language: Language = 'en-IN',
   ) {}
   async prepare(text: string): Promise<PreparedAudio> {
     if (!this.tts) return { ok: false };
     this.ttsChars += text.length;
     try {
       const result = await abortable(
-        this.tts.synthesize(text, 'en-IN', this.signal),
+        this.tts.synthesize(text, this.language, this.signal),
         this.signal,
       );
       this.retries += Math.max(0, (result.attempts ?? 1) - 1);

@@ -34,9 +34,9 @@ export async function runHinglishSmoke(
     result.requests.push({ kind, ok: true, ms: recognized.ms });
     result.transcript = recognized.text;
     result.passed =
-      /[\u0900-\u097F]|\b(meri|hai|hain|karte|gayi)\b/iu.test(
-        recognized.text,
-      ) && /stock|supplier/iu.test(recognized.text);
+      /मेरी|\bmeri\b/iu.test(recognized.text) &&
+      /गिर|\bgir\b/iu.test(recognized.text) &&
+      /stock|supplier/iu.test(recognized.text);
   } catch (error: unknown) {
     result.requests.push({
       kind,

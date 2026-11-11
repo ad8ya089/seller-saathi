@@ -29,9 +29,12 @@ export function applyPlaybackReceipt(session: Session, played: number): void {
     last.spoken = response.spoken;
   }
   if (response.questionId) {
-    const index = response.sentences.indexOf(
-      QUESTION_BANK[response.questionId].text,
-    );
+    const index =
+      session.lang === 'hi-IN'
+        ? response.sentences
+            .map((sentence) => sentence.trim().endsWith('?'))
+            .lastIndexOf(true)
+        : response.sentences.indexOf(QUESTION_BANK[response.questionId].text);
     if (
       index >= played &&
       session.questionsAsked.at(-1) === response.questionId

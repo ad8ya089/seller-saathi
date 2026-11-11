@@ -30,7 +30,8 @@ export class SentenceChunker {
       const character = this.buffer[index];
       const next = this.buffer[index + 1];
       if (character === undefined || !'.?!।'.includes(character)) continue;
-      if (next === undefined ? !final : !/\s/.test(next)) continue;
+      if (next === undefined ? !final : character !== '।' && !/\s/.test(next))
+        continue;
       const length = index + 1;
       if (
         !this.first ||

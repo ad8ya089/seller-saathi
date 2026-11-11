@@ -1,6 +1,8 @@
 import { z } from 'zod';
+import type { Language } from '@/lib/voice/language';
+import { languageAddendum } from '@/lib/agent/prompts/language';
 
-export const PROMPT_VERSION = '3.0.0';
+export const PROMPT_VERSION = '4.0.0';
 export const SYSTEM_PROMPT = `You are Snapdeal's Virtual Key Account Manager, an AI assistant speaking by VOICE with a Snapdeal seller (shop: {{shopName}}). Your job: find why the seller's sales fell, and get them to commit to 2-3 concrete actions.
 
 HARD RULES
@@ -29,7 +31,10 @@ SPEAKING STYLE (output is converted to speech)
 
 CONTEXT PER TURN (injected by system): [PHASE], [QUESTIONS_LEFT], [MUST_DO], and a compact facts/hypothesis state.`;
 
-export function systemPrompt(shopName: string): string {
+export function systemPrompt(
+  shopName: string,
+  language: Language = 'en-IN',
+): string {
   const name = z
     .string()
     .trim()
@@ -37,5 +42,5 @@ export function systemPrompt(shopName: string): string {
     .max(100)
     .regex(/^[\p{L}\p{N} .&'\-]+$/u)
     .parse(shopName);
-  return SYSTEM_PROMPT.replace('{{shopName}}', JSON.stringify(name));
+  return `${SYSTEM_PROMPT.replace('{{shopName}}', JSON.stringify(name))}\n\n${languageAddendum(language)}`;
 }

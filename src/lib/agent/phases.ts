@@ -6,6 +6,7 @@ import { FUNCTION_DECLARATIONS } from '@/lib/agent/tool-contracts';
 import type { ToolName } from '@/lib/agent/tool-contracts';
 import type { ToolDeclaration } from '@/lib/llm/provider';
 import type { DomainState } from '@/lib/domain/types';
+import type { Language } from '@/lib/voice/language';
 
 const TRANSITIONS: Readonly<Record<Phase, readonly Phase[]>> = {
   greeting: ['intake'],
@@ -35,9 +36,15 @@ const TOOLS: Readonly<Record<Phase, readonly ToolName[]>> = {
   summary: [],
   done: [],
 };
-export function hasSellerProblem(text: string): boolean {
-  return /\b(sales?|orders?|stock|cancellations?|business|revenue|selling|dropped|decline)\b/i.test(
-    text,
+export function hasSellerProblem(
+  text: string,
+  language: Language = 'en-IN',
+): boolean {
+  return (
+    (language === 'hi-IN' && /बिक्री|ऑर्डर|स्टॉक|सेल|कारोबार/u.test(text)) ||
+    /\b(sales?|orders?|stock|cancellations?|business|revenue|selling|dropped|decline)\b/i.test(
+      text,
+    )
   );
 }
 export function findingsComplete(session: Session): boolean {
@@ -57,7 +64,10 @@ export function transition(
       'TOOL_NOT_ALLOWED',
       'Conversation transition is not allowed',
     );
-  if (session.phase === 'intake' && !hasSellerProblem(session.lastUserText))
+  if (
+    session.phase === 'intake' &&
+    !hasSellerProblem(session.lastUserText, session.lang)
+  )
     throw new AppError(
       'TOOL_NOT_ALLOWED',
       'Identify the seller problem before findings',
@@ -86,7 +96,10 @@ export function transition(
 }
 export function toolAllowed(session: Session, name: ToolName): boolean {
   if (!TOOLS[session.phase].includes(name)) return false;
-  if (session.phase === 'intake' && !hasSellerProblem(session.lastUserText))
+  if (
+    session.phase === 'intake' &&
+    !hasSellerProblem(session.lastUserText, session.lang)
+  )
     return false;
   if (
     name !== 'get_seller_snapshot' &&

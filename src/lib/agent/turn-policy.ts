@@ -1,6 +1,10 @@
 import { sellerFactSchema } from '@/lib/domain/types';
 import type { FactId, QuestionId, SellerFact } from '@/lib/domain/types';
-import { supportsFact, verifiedAcceptance } from '@/lib/agent/guards';
+import {
+  supportsFact,
+  verifiedAcceptance,
+  normalizeEvidence,
+} from '@/lib/agent/guards';
 import {
   findingsComplete,
   hasSellerProblem,
@@ -11,6 +15,8 @@ import type { Session } from '@/lib/agent/session';
 import type { ToolDeclaration } from '@/lib/llm/provider';
 import { diagnosisFor } from '@/lib/agent/snapshot';
 import type { ToolEnvironment } from '@/lib/agent/tools';
+import type { Language } from '@/lib/voice/language';
+import { HINDI_NEGATION } from '@/lib/agent/hindi-evidence';
 
 const VALUES: Readonly<Record<FactId, readonly (string | number)[]>> = {
   oos_confirmed: ['yes', 'no', 'partial'],
@@ -25,6 +31,7 @@ export function supportedFacts(
   utterance: string,
   question: QuestionId | undefined,
   turn: number,
+  language: Language = 'en-IN',
 ): SellerFact[] {
   const result: SellerFact[] = [];
   for (const [factId, values] of Object.entries(VALUES)) {
@@ -35,7 +42,10 @@ export function supportedFacts(
         quote: utterance.slice(0, 1000),
         turn,
       });
-      if (parsed.success && supportsFact(parsed.data, utterance, question)) {
+      if (
+        parsed.success &&
+        supportsFact(parsed.data, utterance, question, language)
+      ) {
         result.push(parsed.data);
         break;
       }
@@ -46,6 +56,8 @@ export function supportedFacts(
 export function beginTurn(session: Session): void {
   if (session.phase === 'greeting') transition(session, 'intake');
   const wantsChange =
+    (session.lang === 'hi-IN' &&
+      HINDI_NEGATION.test(normalizeEvidence(session.lastUserText))) ||
     /\b(no|not now|change|instead|cannot|can't|cant|unable|different|adjust)\b/i.test(
       session.lastUserText,
     );
@@ -65,7 +77,7 @@ export function requiredStep(
   const select = (names: readonly string[]): ToolDeclaration[] =>
     available.filter((tool) => names.includes(tool.name));
   if (session.phase === 'intake') {
-    const problem = hasSellerProblem(session.lastUserText);
+    const problem = hasSellerProblem(session.lastUserText, session.lang);
     return {
       tools: problem ? select(['get_seller_snapshot']) : available,
       force: problem,
@@ -91,6 +103,7 @@ export function requiredStep(
       session.lastUserText,
       session.questionsAsked.at(-1),
       session.turn,
+      session.lang,
     ).filter((fact) => session.facts[fact.factId]?.turn !== session.turn);
     if (missing.length)
       return {
@@ -119,7 +132,7 @@ export function requiredStep(
     };
   if (
     session.phase === 'confirm' &&
-    verifiedAcceptance(session.lastUserText, session.lastUserText)
+    verifiedAcceptance(session.lastUserText, session.lastUserText, session.lang)
   )
     return {
       tools: select(['commit_action_plan']),

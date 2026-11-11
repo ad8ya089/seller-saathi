@@ -4,6 +4,7 @@ import { sarvamSmokePlan } from '@/lib/voice/language';
 import { runHinglishSmoke } from '@/lib/voice/language-smoke';
 import { SarvamStt } from '@/lib/voice/sarvam-stt';
 import { SarvamTts } from '@/lib/voice/sarvam-tts';
+import { AppError } from '@/lib/errors';
 
 export async function smokeHinglish(args: readonly string[]): Promise<void> {
   const settings = getConfig().sarvam;
@@ -31,6 +32,11 @@ export async function smokeHinglish(args: readonly string[]): Promise<void> {
     timeoutMs: settings.timeoutMs,
     retries: 0,
   };
+  if (!common.apiKey)
+    throw new AppError(
+      'PROVIDER_CONFIG',
+      'Set SARVAM_API_KEY privately before the approved live smoke',
+    );
   const result = await runHinglishSmoke(
     {
       tts: new SarvamTts({ ...common, ...plan.profile.tts }),

@@ -174,7 +174,12 @@ function execute(
         turn: session.turn,
       });
       if (
-        !supportsFact(fact, session.lastUserText, session.questionsAsked.at(-1))
+        !supportsFact(
+          fact,
+          session.lastUserText,
+          session.questionsAsked.at(-1),
+          session.lang,
+        )
       )
         rejected(
           'The fact value and exact quote must be supported by the latest seller answer',
@@ -217,7 +222,13 @@ function execute(
     }
     case 'commit_action_plan': {
       const args = TOOL_ARGS[name].parse(call.args);
-      if (!verifiedAcceptance(args.confirmationQuote, session.lastUserText))
+      if (
+        !verifiedAcceptance(
+          args.confirmationQuote,
+          session.lastUserText,
+          session.lang,
+        )
+      )
         rejected(
           'Acceptance must be explicit, unambiguous and supported by the latest seller utterance',
         );

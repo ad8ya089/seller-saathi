@@ -3,11 +3,8 @@ import { z } from 'zod';
 import { AppError } from '@/lib/errors';
 import { SentenceChunker } from '@/lib/agent/chunker';
 import { SpeechPipeline } from '@/lib/agent/speech-pipeline';
-import {
-  SpeechGuard,
-  SAVED_RECEIPT,
-  SAVE_QUESTION,
-} from '@/lib/agent/speech-guard';
+import { SpeechGuard } from '@/lib/agent/speech-guard';
+import { callCopy, questionText } from '@/lib/domain/call-language';
 import { beginTurn, requiredStep } from '@/lib/agent/turn-policy';
 import { systemPrompt } from '@/lib/agent/prompts/system';
 import { turnContext } from '@/lib/agent/context';
@@ -24,7 +21,6 @@ import { domainState, trimHistory } from '@/lib/agent/session';
 import type { Session, HistoryTurn } from '@/lib/agent/session';
 import { diagnosisFor } from '@/lib/agent/snapshot';
 import { sessionState } from '@/lib/agent/contracts';
-import { QUESTION_BANK } from '@/lib/domain/questions';
 import { lintSpeech } from '@/lib/domain/speech';
 import type { Phase } from '@/lib/domain/types';
 import type { ToolResult } from '@/lib/agent/tool-contracts';
@@ -37,8 +33,10 @@ import type { SttProvider, TtsProvider } from '@/lib/voice/providers';
 import type { EchoInput } from '@/lib/server/turn-input';
 import type { EmitEchoEvent } from '@/lib/voice/events';
 import { throwIfAborted } from '@/lib/voice/abort';
+import type { Language } from '@/lib/voice/language';
 
 export interface TurnMetrics {
+  language?: Language;
   sttMs: number;
   llmFirstMs: number;
   llmTotalMs: number;
@@ -79,6 +77,7 @@ export async function runTurn(
   const now = env.now ?? performance.now.bind(performance);
   const started = now();
   const metrics: TurnMetrics = {
+    language: session.lang,
     usageComplete: true,
     sttMs: 0,
     llmFirstMs: 0,
@@ -102,7 +101,11 @@ export async function runTurn(
       );
     session.counters.sttCalls += 1;
     try {
-      transcript = await env.stt.transcribe(input.wav, 'unknown', env.signal);
+      transcript = await env.stt.transcribe(
+        input.wav,
+        session.lang,
+        env.signal,
+      );
     } catch (error: unknown) {
       if (metrics.providerFallbacks && error instanceof AppError)
         metrics.providerFallbacks.stt += Math.max(
@@ -147,7 +150,15 @@ export async function runTurn(
     messages: [{ kind: 'user', text: session.lastUserText }],
   };
   session.history.push(history);
-  const pipeline = new SpeechPipeline(env.tts, emit, env.signal, started, now);
+  const pipeline = new SpeechPipeline(
+    env.tts,
+    emit,
+    env.signal,
+    started,
+    now,
+    session.lang,
+  );
+  const copy = callCopy(session.lang);
   let guard: SpeechGuard | undefined;
   let reservedQuestion = '';
   let questionId = null as ReturnType<
@@ -163,17 +174,17 @@ export async function runTurn(
     questionId =
       session.phase === 'investigate' ? diagnosis.suggestedNextQuestion : null;
     reservedQuestion = questionId
-      ? QUESTION_BANK[questionId].text
+      ? questionText(questionId, session.lang, env.tools.data)
       : session.phase === 'recommend' || session.phase === 'confirm'
-        ? SAVE_QUESTION
+        ? copy.saveQuestion
         : session.phase === 'intake'
-          ? 'What sales problem can I help with?'
+          ? copy.intakeQuestion
           : '';
     return new SpeechGuard(
       session,
       env.tools.data,
       responsePhase,
-      session.pendingCommit ? SAVED_RECEIPT : reservedQuestion,
+      session.pendingCommit ? copy.savedReceipt : reservedQuestion,
     );
   };
   const speak = async (text: string): Promise<void> => {
@@ -199,7 +210,7 @@ export async function runTurn(
       try {
         result = await env.llm.stream(
           {
-            system: `${systemPrompt(env.tools.data.seller.name)}\n\n${turnContext(session, env.tools.data, step.note, env.tools.settings)}`,
+            system: `${systemPrompt(env.tools.data.seller.name, session.lang)}\n\n${turnContext(session, env.tools.data, step.note, env.tools.settings)}`,
             history: session.history.flatMap((turn) => turn.messages),
             tools: rounds >= maxRounds ? [] : step.tools,
             forceTools: step.force,
@@ -296,7 +307,7 @@ export async function runTurn(
     const finalText = [
       ...guard.chunks,
       reservedQuestion,
-      session.pendingCommit ? SAVED_RECEIPT : '',
+      session.pendingCommit ? copy.savedReceipt : '',
     ]
       .filter(Boolean)
       .join(' ');
@@ -317,12 +328,12 @@ export async function runTurn(
       // Prepare the short receipt before the irreversible append. No provider
       // work remains between the commit point and its final state/receipt.
       const receipt = env.tts
-        ? await pipeline.prepare(SAVED_RECEIPT)
+        ? await pipeline.prepare(copy.savedReceipt)
         : undefined;
       await finalizeCommit(session, env.tools, env.signal);
       transition(session, 'done');
       env.onCommitPoint?.();
-      pipeline.publishReceipt(SAVED_RECEIPT, receipt);
+      pipeline.publishReceipt(copy.savedReceipt, receipt);
     }
     history.spoken = finalText;
     session.counters.ttsChars += pipeline.ttsChars;
